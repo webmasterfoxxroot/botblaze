@@ -136,6 +136,40 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Ultimo Resultado -->
     <div id="last-result-container"></div>
+
+    <!-- ROLETA VISUAL - Animacao do Jogo -->
+    <div class="roulette-container" id="roulette-container">
+        <!-- Status Bar -->
+        <div class="roulette-status" id="roulette-status">
+            <div class="roulette-status-bar" id="roulette-status-bar">
+                <div class="roulette-progress" id="roulette-progress"></div>
+                <span class="roulette-status-text" id="roulette-status-text">Aguardando...</span>
+            </div>
+        </div>
+
+        <!-- Carousel -->
+        <div class="roulette-viewport">
+            <div class="roulette-pointer"></div>
+            <div class="roulette-track" id="roulette-track">
+                <!-- Cards gerados via JS -->
+            </div>
+        </div>
+
+        <!-- Indicador Online -->
+        <div class="roulette-online">
+            <span class="roulette-online-dot"></span> Online
+        </div>
+
+        <!-- Giros Anteriores -->
+        <div class="roulette-history">
+            <div class="roulette-history-label">GIROS ANTERIORES</div>
+            <div class="roulette-history-dots" id="roulette-history-dots">
+                <?php foreach (array_slice($lastGames, 0, 25) as $g): ?>
+                    <span class="rh-dot <?= $colorClasses[$g['color']] ?>" title="<?= $g['roll'] ?>"><?= $g['roll'] ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
     <?php endif; ?>
 
     <!-- Cards de Estatisticas -->
@@ -423,12 +457,188 @@ require_once __DIR__ . '/includes/header.php';
     color: var(--red);
 }
 
+/* ROLETA VISUAL */
+.roulette-container {
+    background: #1a1f2e;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+.roulette-status {
+    padding: 0;
+}
+.roulette-status-bar {
+    position: relative;
+    height: 36px;
+    background: #2a2f3e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.roulette-progress {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #e63946 0%, #ff4d5a 100%);
+    transition: width 1s linear;
+    width: 0%;
+}
+.roulette-status-bar.spinning .roulette-progress {
+    width: 100% !important;
+    background: linear-gradient(90deg, #e63946 0%, #ff4d5a 100%);
+}
+.roulette-status-bar.result .roulette-progress {
+    width: 0% !important;
+}
+.roulette-status-text {
+    position: relative;
+    z-index: 2;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.roulette-viewport {
+    position: relative;
+    height: 140px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+.roulette-pointer {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #fff;
+    z-index: 10;
+    transform: translateX(-50%);
+    box-shadow: 0 0 10px rgba(255,255,255,0.5);
+}
+.roulette-pointer::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 10px solid #fff;
+}
+.roulette-track {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px;
+    transition: transform 3s cubic-bezier(0.15, 0.85, 0.3, 1);
+    will-change: transform;
+}
+.roulette-track.no-transition {
+    transition: none !important;
+}
+.roulette-card {
+    flex-shrink: 0;
+    width: 90px;
+    height: 110px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.roulette-card-inner {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+}
+.roulette-card.rc-red {
+    background: linear-gradient(135deg, #b91c2c 0%, #8b1520 100%);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+}
+.roulette-card.rc-black {
+    background: linear-gradient(135deg, #2d2d40 0%, #1a1a2e 100%);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+}
+.roulette-card.rc-white {
+    background: linear-gradient(135deg, #ddd 0%, #aaa 100%);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.15);
+}
+.roulette-card.rc-white .roulette-card-inner {
+    border-color: rgba(0,0,0,0.15);
+    color: #333;
+}
+.roulette-card.rc-white .rc-icon { color: #333; }
+.rc-icon {
+    font-size: 22px;
+    color: rgba(255,255,255,0.6);
+}
+.roulette-online {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--green);
+    font-weight: 600;
+}
+.roulette-online-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+}
+.roulette-history {
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+}
+.roulette-history-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+.roulette-history-dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.rh-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: default;
+}
+.rh-dot.red { background: #e63946; color: #fff; }
+.rh-dot.black { background: #1a1a2e; color: #fff; border: 1px solid #444; }
+.rh-dot.white { background: #e8e8e8; color: #333; }
+
 @media (max-width: 768px) {
     .strategies-grid { grid-template-columns: 1fr; }
     .active-signal-name { font-size: 22px; }
     .active-signal-dot { width: 30px; height: 30px; }
     .active-signal-details { flex-direction: column; gap: 4px; }
     .active-signal-others { flex-direction: column; align-items: center; }
+    .roulette-card { width: 70px; height: 90px; }
+    .roulette-card-inner { width: 40px; height: 40px; font-size: 14px; }
+    .roulette-viewport { height: 110px; }
 }
 </style>
 
@@ -440,6 +650,256 @@ const strategyNames = { 'sequences': 'Sequencias', 'frequency': 'Frequencia', 'm
 
 let lastSignalId = null;
 let wsConnected = false;
+
+// === ROLETA VISUAL ===
+const rouletteGames = []; // Ultimos jogos (cronologico: antigo->novo)
+let rouletteState = 'waiting'; // waiting, spinning, result
+let lastGameId = null;
+let countdownTimer = null;
+let countdownSec = 0;
+
+// Mapeamento roll -> cor (Blaze Double: 0=branco, 1-7=vermelho, 8-14=preto)
+function rollToColor(roll) {
+    if (roll === 0) return 0; // branco
+    if (roll >= 1 && roll <= 7) return 1; // vermelho
+    return 2; // preto
+}
+
+function getCardClass(color) {
+    return { 0: 'rc-white', 1: 'rc-red', 2: 'rc-black' }[parseInt(color)] || 'rc-black';
+}
+
+function createCardHTML(game) {
+    const color = parseInt(game.color);
+    const cls = getCardClass(color);
+    const roll = game.roll;
+    if (color === 0) {
+        return `<div class="roulette-card ${cls}"><div class="roulette-card-inner"><span class="rc-icon">&#10070;</span></div></div>`;
+    }
+    return `<div class="roulette-card ${cls}"><div class="roulette-card-inner">${roll}</div></div>`;
+}
+
+function generateRandomCards(count) {
+    const cards = [];
+    for (let i = 0; i < count; i++) {
+        const roll = Math.floor(Math.random() * 15);
+        const color = rollToColor(roll);
+        cards.push({ roll, color });
+    }
+    return cards;
+}
+
+function initRoulette(games) {
+    if (!games || games.length === 0) return;
+    // Ordem cronologica (antigo -> novo)
+    const chrono = [...games].reverse();
+    rouletteGames.length = 0;
+    chrono.forEach(g => rouletteGames.push(g));
+
+    renderRouletteStatic();
+    setRouletteStatus('waiting');
+    if (rouletteGames.length > 0) {
+        lastGameId = rouletteGames[rouletteGames.length - 1].game_id || rouletteGames[rouletteGames.length - 1].id;
+    }
+}
+
+function renderRouletteStatic() {
+    const track = document.getElementById('roulette-track');
+    if (!track) return;
+
+    // Mostra os ultimos ~8 jogos centrados
+    const recent = rouletteGames.slice(-8);
+    const viewport = track.parentElement;
+    const vpWidth = viewport ? viewport.offsetWidth : 800;
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98; // card + gap
+    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+
+    // Adiciona cards extras antes para preencher
+    const padBefore = generateRandomCards(centerCards);
+    const padAfter = generateRandomCards(centerCards + 2);
+
+    let html = '';
+    padBefore.forEach(g => html += createCardHTML(g));
+    recent.forEach(g => html += createCardHTML(g));
+    padAfter.forEach(g => html += createCardHTML(g));
+
+    track.classList.add('no-transition');
+    track.innerHTML = html;
+
+    // Centraliza no ultimo jogo real
+    const totalBefore = padBefore.length + recent.length - 1;
+    const offset = totalBefore * cardWidth - vpWidth / 2 + cardWidth / 2;
+    track.style.transform = `translateX(-${offset}px)`;
+
+    requestAnimationFrame(() => {
+        track.classList.remove('no-transition');
+    });
+}
+
+function spinRoulette(newGame) {
+    rouletteState = 'spinning';
+    setRouletteStatus('spinning');
+
+    const track = document.getElementById('roulette-track');
+    if (!track) return;
+
+    const viewport = track.parentElement;
+    const vpWidth = viewport ? viewport.offsetWidth : 800;
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98;
+    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+
+    // Gera muitos cards aleatorios para a animacao + o resultado no final
+    const spinCards = generateRandomCards(30);
+    const padBefore = rouletteGames.slice(-3);
+    const padAfter = generateRandomCards(centerCards + 2);
+
+    let html = '';
+    padBefore.forEach(g => html += createCardHTML(g));
+    spinCards.forEach(g => html += createCardHTML(g));
+    html += createCardHTML(newGame); // O resultado real
+    padAfter.forEach(g => html += createCardHTML(g));
+
+    // Posiciona no inicio sem transicao
+    track.classList.add('no-transition');
+    track.innerHTML = html;
+    track.style.transform = `translateX(0px)`;
+
+    // Inicia animacao apos 1 frame
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            track.classList.remove('no-transition');
+            // Para no card do resultado (posicao = padBefore + spinCards)
+            const targetIndex = padBefore.length + spinCards.length;
+            const offset = targetIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
+            track.style.transform = `translateX(-${offset}px)`;
+        });
+    });
+
+    // Apos animacao parar: mostra resultado
+    setTimeout(() => {
+        rouletteState = 'result';
+        const roll = newGame.roll;
+        const colorName = colorNames[parseInt(newGame.color)] || '?';
+        setRouletteStatus('result', `Blaze Girou ${roll}!`);
+
+        // Adiciona ao historico
+        rouletteGames.push(newGame);
+        if (rouletteGames.length > 20) rouletteGames.shift();
+        updateRouletteHistory(newGame);
+
+        // Volta para waiting apos 5s
+        setTimeout(() => {
+            rouletteState = 'waiting';
+            setRouletteStatus('waiting');
+            renderRouletteStatic();
+        }, 5000);
+    }, 3500);
+}
+
+function setRouletteStatus(state, text) {
+    const bar = document.getElementById('roulette-status-bar');
+    const statusText = document.getElementById('roulette-status-text');
+    const progress = document.getElementById('roulette-progress');
+    if (!bar || !statusText || !progress) return;
+
+    bar.className = 'roulette-status-bar';
+
+    if (state === 'waiting') {
+        statusText.textContent = 'Esperando...';
+        progress.style.width = '0%';
+        startCountdown();
+    } else if (state === 'spinning') {
+        bar.classList.add('spinning');
+        statusText.textContent = 'Girando...';
+        progress.style.width = '100%';
+        stopCountdown();
+    } else if (state === 'result') {
+        bar.classList.add('result');
+        statusText.textContent = text || 'Resultado!';
+        progress.style.width = '0%';
+        stopCountdown();
+    } else if (state === 'countdown') {
+        statusText.textContent = text || 'Girando Em...';
+    }
+}
+
+function startCountdown() {
+    stopCountdown();
+    countdownSec = 30;
+    const progress = document.getElementById('roulette-progress');
+    const statusText = document.getElementById('roulette-status-text');
+
+    countdownTimer = setInterval(() => {
+        countdownSec--;
+        if (countdownSec <= 0) {
+            stopCountdown();
+            return;
+        }
+        if (statusText && rouletteState === 'waiting') {
+            const secs = countdownSec.toString().padStart(2, '0');
+            statusText.textContent = `Girando Em 00:${secs}`;
+        }
+        if (progress && rouletteState === 'waiting') {
+            progress.style.width = ((30 - countdownSec) / 30 * 100) + '%';
+        }
+    }, 1000);
+}
+
+function stopCountdown() {
+    if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
+}
+
+function updateRouletteHistory(newGame) {
+    const dots = document.getElementById('roulette-history-dots');
+    if (!dots) return;
+
+    const color = parseInt(newGame.color);
+    const cls = colorClasses[color] || 'white';
+    const dot = document.createElement('span');
+    dot.className = `rh-dot ${cls}`;
+    dot.title = newGame.roll;
+    dot.textContent = newGame.roll;
+
+    // Insere no inicio
+    dots.insertBefore(dot, dots.firstChild);
+    // Remove excesso
+    while (dots.children.length > 25) {
+        dots.removeChild(dots.lastChild);
+    }
+}
+
+// Carrega estado inicial da roleta
+function loadRouletteState() {
+    fetch('/api/game-state.php')
+        .then(r => r.json())
+        .then(data => {
+            if (data.games && data.games.length > 0) {
+                initRoulette(data.games);
+            }
+        }).catch(() => {});
+}
+
+// Polling: detecta novos jogos para animacao (fallback do WS)
+let lastPolledGameId = null;
+function pollGameState() {
+    fetch('/api/game-state.php')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.lastGame) return;
+            const gameId = data.lastGame.game_id;
+            if (lastPolledGameId === null) {
+                lastPolledGameId = gameId;
+                return;
+            }
+            if (gameId !== lastPolledGameId && rouletteState !== 'spinning') {
+                lastPolledGameId = gameId;
+                spinRoulette(data.lastGame);
+            }
+        }).catch(() => {});
+}
 
 // === WebSocket para receber sinais em tempo real do bot ===
 function connectWebSocket() {
@@ -458,6 +918,21 @@ function connectWebSocket() {
         ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
+
+                // Jogos recentes para inicializar o carousel
+                if (msg.type === 'recent_games' && msg.data.games) {
+                    initRoulette(msg.data.games);
+                    if (msg.data.games.length > 0) {
+                        lastPolledGameId = msg.data.games[0].game_id;
+                    }
+                }
+
+                // Novo jogo detectado - ANIMAR!
+                if (msg.type === 'new_game' && msg.data.game) {
+                    if (rouletteState !== 'spinning') {
+                        spinRoulette(msg.data.game);
+                    }
+                }
 
                 if (msg.type === 'signal') {
                     // Sinal novo recebido via WebSocket - atualiza banner IMEDIATAMENTE
@@ -715,11 +1190,15 @@ function updateVal(id, value) {
     }
 }
 
-// Inicia WebSocket
+// Inicia tudo
+loadRouletteState();
 connectWebSocket();
 
 // Polling de sinal ativo a cada 3s (rapido!)
 setInterval(refreshActiveSignal, 3000);
+
+// Polling de estado do jogo a cada 5s (fallback para animacao)
+setInterval(pollGameState, 5000);
 
 // Polling completo a cada 5s (stats, estrategias, historico)
 setInterval(refreshDashboard, 5000);

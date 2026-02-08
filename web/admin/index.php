@@ -107,6 +107,11 @@ $activeSignals = $db->query("
     LIMIT 4
 ")->fetchAll();
 
+// Ultimas rodadas para o carousel
+$lastGames = $db->query(
+    "SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 25"
+)->fetchAll();
+
 // Ultimos usuarios
 $recentUsers = $db->query("
     SELECT u.*,
@@ -175,6 +180,31 @@ require_once __DIR__ . '/../includes/header.php';
 
     <!-- Ultimo Resultado -->
     <div id="last-result-container"></div>
+
+    <!-- ROLETA VISUAL - Animacao do Jogo -->
+    <div class="roulette-container" id="roulette-container">
+        <div class="roulette-status" id="roulette-status">
+            <div class="roulette-status-bar" id="roulette-status-bar">
+                <div class="roulette-progress" id="roulette-progress"></div>
+                <span class="roulette-status-text" id="roulette-status-text">Aguardando...</span>
+            </div>
+        </div>
+        <div class="roulette-viewport">
+            <div class="roulette-pointer"></div>
+            <div class="roulette-track" id="roulette-track"></div>
+        </div>
+        <div class="roulette-online">
+            <span class="roulette-online-dot"></span> Online
+        </div>
+        <div class="roulette-history">
+            <div class="roulette-history-label">GIROS ANTERIORES</div>
+            <div class="roulette-history-dots" id="roulette-history-dots">
+                <?php foreach (array_slice($lastGames, 0, 25) as $g): ?>
+                    <span class="rh-dot <?= $colorClasses[$g['color']] ?>" title="<?= $g['roll'] ?>"><?= $g['roll'] ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
 
     <!-- Stats Gerais -->
     <div class="stats-grid stats-grid-6">
@@ -479,11 +509,44 @@ require_once __DIR__ . '/../includes/header.php';
     border: 1px solid var(--red);
     color: var(--red);
 }
+/* ROLETA VISUAL */
+.roulette-container { background: #1a1f2e; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+.roulette-status-bar { position: relative; height: 36px; background: #2a2f3e; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.roulette-progress { position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #e63946 0%, #ff4d5a 100%); transition: width 1s linear; width: 0%; }
+.roulette-status-bar.spinning .roulette-progress { width: 100% !important; }
+.roulette-status-bar.result .roulette-progress { width: 0% !important; }
+.roulette-status-text { position: relative; z-index: 2; font-size: 14px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.roulette-viewport { position: relative; height: 140px; overflow: hidden; display: flex; align-items: center; }
+.roulette-pointer { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; background: #fff; z-index: 10; transform: translateX(-50%); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+.roulette-pointer::before { content: ''; position: absolute; top: -6px; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid #fff; }
+.roulette-track { display: flex; gap: 8px; padding: 0 20px; transition: transform 3s cubic-bezier(0.15, 0.85, 0.3, 1); will-change: transform; }
+.roulette-track.no-transition { transition: none !important; }
+.roulette-card { flex-shrink: 0; width: 90px; height: 110px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.roulette-card-inner { width: 52px; height: 52px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; }
+.roulette-card.rc-red { background: linear-gradient(135deg, #b91c2c 0%, #8b1520 100%); box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+.roulette-card.rc-black { background: linear-gradient(135deg, #2d2d40 0%, #1a1a2e 100%); box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+.roulette-card.rc-white { background: linear-gradient(135deg, #ddd 0%, #aaa 100%); box-shadow: inset 0 0 20px rgba(0,0,0,0.15); }
+.roulette-card.rc-white .roulette-card-inner { border-color: rgba(0,0,0,0.15); color: #333; }
+.rc-icon { font-size: 22px; color: rgba(255,255,255,0.6); }
+.roulette-card.rc-white .rc-icon { color: #333; }
+.roulette-online { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 8px 16px; font-size: 13px; color: var(--green); font-weight: 600; }
+.roulette-online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+.roulette-history { border-top: 1px solid var(--border); padding: 12px 16px; }
+.roulette-history-label { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+.roulette-history-dots { display: flex; flex-wrap: wrap; gap: 4px; }
+.rh-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; cursor: default; }
+.rh-dot.red { background: #e63946; color: #fff; }
+.rh-dot.black { background: #1a1a2e; color: #fff; border: 1px solid #444; }
+.rh-dot.white { background: #e8e8e8; color: #333; }
+
 @media (max-width: 768px) {
     .strategies-grid { grid-template-columns: 1fr; }
     .active-signal-name { font-size: 22px; }
     .active-signal-dot { width: 30px; height: 30px; }
     .active-signal-details { flex-direction: column; gap: 4px; }
+    .roulette-card { width: 70px; height: 90px; }
+    .roulette-card-inner { width: 40px; height: 40px; font-size: 14px; }
+    .roulette-viewport { height: 110px; }
 }
 </style>
 
@@ -494,6 +557,157 @@ const strategyNames = { 'sequences': 'Sequencias', 'frequency': 'Frequencia', 'm
 
 let lastSignalId = null;
 let wsConnected = false;
+
+// === ROLETA VISUAL ===
+const rouletteGames = [];
+let rouletteState = 'waiting';
+let countdownTimer = null;
+let countdownSec = 0;
+
+function rollToColor(roll) {
+    if (roll === 0) return 0;
+    if (roll >= 1 && roll <= 7) return 1;
+    return 2;
+}
+function getCardClass(color) {
+    return { 0: 'rc-white', 1: 'rc-red', 2: 'rc-black' }[parseInt(color)] || 'rc-black';
+}
+function createCardHTML(game) {
+    const color = parseInt(game.color);
+    const cls = getCardClass(color);
+    if (color === 0) return `<div class="roulette-card ${cls}"><div class="roulette-card-inner"><span class="rc-icon">&#10070;</span></div></div>`;
+    return `<div class="roulette-card ${cls}"><div class="roulette-card-inner">${game.roll}</div></div>`;
+}
+function generateRandomCards(count) {
+    const cards = [];
+    for (let i = 0; i < count; i++) {
+        const roll = Math.floor(Math.random() * 15);
+        cards.push({ roll, color: rollToColor(roll) });
+    }
+    return cards;
+}
+function initRoulette(games) {
+    if (!games || games.length === 0) return;
+    const chrono = [...games].reverse();
+    rouletteGames.length = 0;
+    chrono.forEach(g => rouletteGames.push(g));
+    renderRouletteStatic();
+    setRouletteStatus('waiting');
+}
+function renderRouletteStatic() {
+    const track = document.getElementById('roulette-track');
+    if (!track) return;
+    const recent = rouletteGames.slice(-8);
+    const vpWidth = track.parentElement ? track.parentElement.offsetWidth : 800;
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98;
+    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+    const padBefore = generateRandomCards(centerCards);
+    const padAfter = generateRandomCards(centerCards + 2);
+    let html = '';
+    padBefore.forEach(g => html += createCardHTML(g));
+    recent.forEach(g => html += createCardHTML(g));
+    padAfter.forEach(g => html += createCardHTML(g));
+    track.classList.add('no-transition');
+    track.innerHTML = html;
+    const totalBefore = padBefore.length + recent.length - 1;
+    const offset = totalBefore * cardWidth - vpWidth / 2 + cardWidth / 2;
+    track.style.transform = `translateX(-${offset}px)`;
+    requestAnimationFrame(() => track.classList.remove('no-transition'));
+}
+function spinRoulette(newGame) {
+    rouletteState = 'spinning';
+    setRouletteStatus('spinning');
+    const track = document.getElementById('roulette-track');
+    if (!track) return;
+    const vpWidth = track.parentElement ? track.parentElement.offsetWidth : 800;
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98;
+    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+    const spinCards = generateRandomCards(30);
+    const padBefore = rouletteGames.slice(-3);
+    const padAfter = generateRandomCards(centerCards + 2);
+    let html = '';
+    padBefore.forEach(g => html += createCardHTML(g));
+    spinCards.forEach(g => html += createCardHTML(g));
+    html += createCardHTML(newGame);
+    padAfter.forEach(g => html += createCardHTML(g));
+    track.classList.add('no-transition');
+    track.innerHTML = html;
+    track.style.transform = `translateX(0px)`;
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            track.classList.remove('no-transition');
+            const targetIndex = padBefore.length + spinCards.length;
+            const offset = targetIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
+            track.style.transform = `translateX(-${offset}px)`;
+        });
+    });
+    setTimeout(() => {
+        rouletteState = 'result';
+        setRouletteStatus('result', `Blaze Girou ${newGame.roll}!`);
+        rouletteGames.push(newGame);
+        if (rouletteGames.length > 20) rouletteGames.shift();
+        updateRouletteHistory(newGame);
+        setTimeout(() => {
+            rouletteState = 'waiting';
+            setRouletteStatus('waiting');
+            renderRouletteStatic();
+        }, 5000);
+    }, 3500);
+}
+function setRouletteStatus(state, text) {
+    const bar = document.getElementById('roulette-status-bar');
+    const statusText = document.getElementById('roulette-status-text');
+    const progress = document.getElementById('roulette-progress');
+    if (!bar || !statusText || !progress) return;
+    bar.className = 'roulette-status-bar';
+    if (state === 'waiting') { statusText.textContent = 'Esperando...'; progress.style.width = '0%'; startCountdown(); }
+    else if (state === 'spinning') { bar.classList.add('spinning'); statusText.textContent = 'Girando...'; progress.style.width = '100%'; stopCountdown(); }
+    else if (state === 'result') { bar.classList.add('result'); statusText.textContent = text || 'Resultado!'; progress.style.width = '0%'; stopCountdown(); }
+}
+function startCountdown() {
+    stopCountdown();
+    countdownSec = 30;
+    countdownTimer = setInterval(() => {
+        countdownSec--;
+        if (countdownSec <= 0) { stopCountdown(); return; }
+        const statusText = document.getElementById('roulette-status-text');
+        const progress = document.getElementById('roulette-progress');
+        if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${countdownSec.toString().padStart(2,'0')}`;
+        if (progress && rouletteState === 'waiting') progress.style.width = ((30 - countdownSec) / 30 * 100) + '%';
+    }, 1000);
+}
+function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
+function updateRouletteHistory(newGame) {
+    const dots = document.getElementById('roulette-history-dots');
+    if (!dots) return;
+    const cls = colorClasses[parseInt(newGame.color)] || 'white';
+    const dot = document.createElement('span');
+    dot.className = `rh-dot ${cls}`;
+    dot.title = newGame.roll;
+    dot.textContent = newGame.roll;
+    dots.insertBefore(dot, dots.firstChild);
+    while (dots.children.length > 25) dots.removeChild(dots.lastChild);
+}
+function loadRouletteState() {
+    fetch('/api/game-state.php')
+        .then(r => r.json())
+        .then(data => { if (data.games && data.games.length > 0) initRoulette(data.games); })
+        .catch(() => {});
+}
+let lastPolledGameId = null;
+function pollGameState() {
+    fetch('/api/game-state.php')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.lastGame) return;
+            const gameId = data.lastGame.game_id;
+            if (lastPolledGameId === null) { lastPolledGameId = gameId; return; }
+            if (gameId !== lastPolledGameId && rouletteState !== 'spinning') {
+                lastPolledGameId = gameId;
+                spinRoulette(data.lastGame);
+            }
+        }).catch(() => {});
+}
 
 // === WebSocket para receber sinais em tempo real do bot ===
 function connectWebSocket() {
@@ -512,6 +726,15 @@ function connectWebSocket() {
         ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
+
+                if (msg.type === 'recent_games' && msg.data.games) {
+                    initRoulette(msg.data.games);
+                    if (msg.data.games.length > 0) lastPolledGameId = msg.data.games[0].game_id;
+                }
+
+                if (msg.type === 'new_game' && msg.data.game) {
+                    if (rouletteState !== 'spinning') spinRoulette(msg.data.game);
+                }
 
                 if (msg.type === 'signal') {
                     showActiveSignal(msg.data);
@@ -726,11 +949,15 @@ function updateStat(id, value) {
     }
 }
 
-// Inicia WebSocket
+// Inicia tudo
+loadRouletteState();
 connectWebSocket();
 
 // Polling de sinal ativo a cada 3s
 setInterval(refreshActiveSignal, 3000);
+
+// Polling de estado do jogo a cada 5s (fallback para animacao)
+setInterval(pollGameState, 5000);
 
 // Polling completo admin a cada 5s
 setInterval(refreshAdmin, 5000);
