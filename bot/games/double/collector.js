@@ -6,18 +6,26 @@ class DoubleCollector {
         this.apiUrl = config.apiUrl;
         this.timer = null;
         this.lastGameId = null;
-        this.onNewGame = null; // callback quando detecta jogo novo
-        this.collecting = false; // evita coletas sobrepostas
+        this.onNewGame = null;          // callback: jogo novo detectado
+        this.onSyncUpdate = null;       // callback: envia estado completo pro frontend
+        this.collecting = false;
+        this.pollInterval = 1;          // segundos
+
+        // Sincronizacao com a Blaze
+        this.blazeGames = [];           // lista completa da API (espelho)
+        this.cycleTime = 30;            // tempo medio entre jogos (calculado automaticamente)
+        this.lastGameTime = null;       // timestamp do ultimo jogo detectado
+        this.nextGameEstimate = null;   // quando o proximo jogo deve aparecer
+        this.cycleHistory = [];         // historico de ciclos para media movel
     }
 
     async fetchRecent() {
         try {
-            // Cache-busting: adiciona timestamp para evitar cache da API
             const separator = this.apiUrl.includes('?') ? '&' : '?';
             const url = `${this.apiUrl}${separator}_t=${Date.now()}`;
 
             const response = await axios.get(url, {
-                timeout: 5000, // 5s timeout (era 8s)
+                timeout: 5000,
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Accept': 'application/json',
@@ -33,30 +41,70 @@ class DoubleCollector {
         }
     }
 
-    async saveGames(games) {
-        if (!games.length) return 0;
+    // Calcula o ritmo da Blaze a partir dos timestamps dos jogos
+    calculateCycleTime(games) {
+        if (!games || games.length < 3) return;
 
-        let saved = 0;
+        const intervals = [];
+        for (let i = 0; i < Math.min(games.length - 1, 10); i++) {
+            const t1 = new Date(games[i].created_at).getTime();
+            const t2 = new Date(games[i + 1].created_at).getTime();
+            const diff = (t1 - t2) / 1000; // segundos
+            if (diff > 10 && diff < 120) {  // so aceita intervalos razoaveis
+                intervals.push(diff);
+            }
+        }
+
+        if (intervals.length === 0) return;
+
+        // Media dos intervalos = tempo do ciclo
+        const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        this.cycleTime = Math.round(avg);
+
+        console.log(`[Sync] Ciclo Blaze: ${this.cycleTime}s (calculado de ${intervals.length} intervalos: ${intervals.map(i => i.toFixed(0) + 's').join(', ')})`);
+    }
+
+    // Estima quando o proximo jogo vai aparecer na API
+    estimateNextGame() {
+        if (!this.lastGameTime) return null;
+        this.nextGameEstimate = this.lastGameTime + (this.cycleTime * 1000);
+        return this.nextGameEstimate;
+    }
+
+    // Retorna quantos segundos faltam para o proximo jogo
+    getSecondsToNext() {
+        if (!this.nextGameEstimate) return null;
+        const remaining = (this.nextGameEstimate - Date.now()) / 1000;
+        return Math.max(0, Math.round(remaining));
+    }
+
+    async saveGame(game) {
         const query = `
             INSERT IGNORE INTO game_history_double (game_id, color, roll, server_seed, played_at)
             VALUES (?, ?, ?, ?, ?)
         `;
-
-        for (const game of games) {
-            try {
-                const [result] = await this.db.execute(query, [
-                    game.id,
-                    game.color,
-                    game.roll,
-                    game.server_seed,
-                    new Date(game.created_at)
-                ]);
-                if (result.affectedRows > 0) saved++;
-            } catch (err) {
-                if (err.code !== 'ER_DUP_ENTRY') {
-                    console.error('[Collector] Erro ao salvar:', err.message);
-                }
+        try {
+            const [result] = await this.db.execute(query, [
+                game.id,
+                game.color,
+                game.roll,
+                game.server_seed,
+                new Date(game.created_at)
+            ]);
+            return result.affectedRows > 0;
+        } catch (err) {
+            if (err.code !== 'ER_DUP_ENTRY') {
+                console.error('[Collector] Erro ao salvar:', err.message);
             }
+            return false;
+        }
+    }
+
+    async saveGames(games) {
+        if (!games.length) return 0;
+        let saved = 0;
+        for (const game of games) {
+            if (await this.saveGame(game)) saved++;
         }
         return saved;
     }
@@ -68,8 +116,28 @@ class DoubleCollector {
         return rows[0].total;
     }
 
+    // Monta o estado completo para enviar ao frontend
+    buildSyncState(newGame) {
+        return {
+            games: this.blazeGames,         // lista completa da API (espelho)
+            newGame: newGame || null,        // jogo novo (se acabou de detectar)
+            cycleTime: this.cycleTime,       // tempo do ciclo em segundos
+            lastGameTime: this.lastGameTime, // timestamp do ultimo jogo
+            nextGameEstimate: this.nextGameEstimate,
+            secondsToNext: this.getSecondsToNext(),
+            timestamp: Date.now()
+        };
+    }
+
+    // Envia estado completo para o frontend
+    broadcastSync(newGame) {
+        if (this.onSyncUpdate) {
+            this.onSyncUpdate(this.buildSyncState(newGame));
+        }
+    }
+
+    // Polling principal - le a API e detecta mudancas
     async collect() {
-        // Evita coletas sobrepostas
         if (this.collecting) return false;
         this.collecting = true;
 
@@ -83,45 +151,84 @@ class DoubleCollector {
                 return false;
             }
 
+            // Atualiza espelho da API
+            this.blazeGames = games;
+
             const newestId = games[0]?.id;
 
-            // Primeira execucao: salva tudo e memoriza
+            // === PRIMEIRA EXECUCAO: aprende o ritmo ===
             if (this.lastGameId === null) {
                 this.lastGameId = newestId;
+                this.lastGameTime = new Date(games[0].created_at).getTime();
+
+                // Calcula ciclo a partir do historico da API
+                this.calculateCycleTime(games);
+                this.estimateNextGame();
+
                 const saved = await this.saveGames(games);
                 const total = await this.getTotalGames();
-                console.log(`[Collector] Inicial: Salvou ${saved} | Total: ${total} | API: ${fetchTime}ms`);
+                console.log(`[Collector] Inicial: ${saved} salvos | Total: ${total} | API: ${fetchTime}ms`);
+                console.log(`[Sync] Proximo jogo estimado em ~${this.getSecondsToNext()}s`);
+
+                // Envia estado inicial para dashboards
+                this.broadcastSync(null);
+
                 this.collecting = false;
                 return saved > 0;
             }
 
-            // Sem jogo novo
+            // === SEM JOGO NOVO: atualiza countdown ===
             if (newestId === this.lastGameId) {
+                // Envia update de timing (countdown atualizado)
+                this.broadcastSync(null);
                 this.collecting = false;
                 return false;
             }
 
-            // JOGO NOVO DETECTADO!
-            const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
+            // === JOGO NOVO DETECTADO! ===
             const newest = games[0];
+            const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
 
-            // Calcula atraso: quanto tempo entre o jogo ter sido criado e nos detectarmos
-            const gameTime = new Date(newest.created_at).getTime();
-            const delay = ((Date.now() - gameTime) / 1000).toFixed(1);
+            // Calcula atraso real
+            const newGameTime = new Date(newest.created_at).getTime();
+            const delay = ((Date.now() - newGameTime) / 1000).toFixed(1);
+
+            // Atualiza ciclo real (diferenca entre este jogo e o anterior)
+            if (this.lastGameTime) {
+                const realCycle = (newGameTime - this.lastGameTime) / 1000;
+                if (realCycle > 10 && realCycle < 120) {
+                    this.cycleHistory.push(realCycle);
+                    if (this.cycleHistory.length > 20) this.cycleHistory.shift();
+
+                    // Media movel dos ultimos ciclos reais
+                    const avg = this.cycleHistory.reduce((a, b) => a + b, 0) / this.cycleHistory.length;
+                    this.cycleTime = Math.round(avg);
+                }
+            }
 
             console.log(`\n[NOVO JOGO] Roll ${newest.roll} = ${colorNames[newest.color]} (ID: ${newestId})`);
-            console.log(`[Timing] API: ${fetchTime}ms | Atraso desde jogo: ${delay}s`);
+            console.log(`[Timing] API: ${fetchTime}ms | Atraso: ${delay}s | Ciclo: ${this.cycleTime}s`);
 
             this.lastGameId = newestId;
-            const saved = await this.saveGames(games);
-            const total = await this.getTotalGames();
-            console.log(`[Collector] Salvou ${saved} novos | Total: ${total}`);
+            this.lastGameTime = newGameTime;
 
-            // Dispara callback IMEDIATAMENTE
+            // Estima proximo jogo
+            this.estimateNextGame();
+            console.log(`[Sync] Proximo jogo em ~${this.getSecondsToNext()}s`);
+
+            // Salva no banco
+            await this.saveGames(games);
+            const total = await this.getTotalGames();
+            console.log(`[Collector] Total: ${total}`);
+
+            // Envia estado completo com jogo novo para dashboards
+            this.broadcastSync(newest);
+
+            // Dispara callback para analise/sinais
             if (this.onNewGame) {
                 const callbackStart = Date.now();
                 await this.onNewGame(newest);
-                console.log(`[Timing] Callback completo em ${Date.now() - callbackStart}ms`);
+                console.log(`[Timing] Analise completa em ${Date.now() - callbackStart}ms`);
             }
 
             this.collecting = false;
@@ -133,11 +240,20 @@ class DoubleCollector {
         }
     }
 
+    getStatus() {
+        return {
+            lastGameId: this.lastGameId,
+            cycleTime: this.cycleTime,
+            secondsToNext: this.getSecondsToNext(),
+            pollInterval: this.pollInterval,
+            totalGamesApi: this.blazeGames.length
+        };
+    }
+
     start() {
-        // Polling RAPIDO: checa a cada 3 segundos se tem jogo novo
-        console.log('[Collector] Monitorando API a cada 3s...');
+        console.log(`[Collector] Monitorando Blaze API a cada ${this.pollInterval}s...`);
         this.collect();
-        this.timer = setInterval(() => this.collect(), 3000);
+        this.timer = setInterval(() => this.collect(), this.pollInterval * 1000);
     }
 
     stop() {

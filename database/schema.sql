@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS bot_settings (
 
 -- Defaults
 INSERT INTO bot_settings (setting_key, setting_value) VALUES
-('collect_interval', '3000'),
+('collect_interval', '1'),
 ('confidence_min', '55'),
 ('strategy_sequences', '1'),
 ('strategy_frequency', '1'),
@@ -128,5 +128,7 @@ INSERT INTO bot_settings (setting_key, setting_value) VALUES
 ('analysis_window', '50'),
 ('history_limit', '2000'),
 ('time_offset', '0'),
-('bot_status', 'running')
+('bot_status', 'running'),
+('blaze_api_url', ''),
+('blaze_ws_url', '')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;

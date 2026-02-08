@@ -780,25 +780,40 @@ function spinRoulette(newGame) {
         });
     });
 
-    // Apos animacao: mostra resultado e volta a exibir dados reais
     setTimeout(() => {
         rouletteState = 'result';
         setRouletteStatus('result', `Blaze Girou ${newGame.roll}!`);
-
-        // Adiciona ao array de jogos reais
         rouletteGames.push(newGame);
         if (rouletteGames.length > 20) rouletteGames.shift();
-
-        // Atualiza giros anteriores
-        addToRouletteHistory(newGame);
-
-        // Apos 5s volta para view estatica com TODOS os dados reais
         setTimeout(() => {
             rouletteState = 'waiting';
             setRouletteStatus('waiting');
             renderRouletteStatic();
-        }, 5000);
+        }, 4000);
     }, 3500);
+}
+
+let blazeCycleTime = 30;
+let lastSyncGameId = null;
+
+// HANDLER PRINCIPAL: recebe blaze_sync do bot
+function handleBlazeSync(data) {
+    if (!data || !data.games || data.games.length === 0) return;
+    if (data.cycleTime) blazeCycleTime = data.cycleTime;
+    const newestId = data.games[0].id || data.games[0].game_id;
+    if (data.newGame && newestId !== lastSyncGameId && rouletteState !== 'spinning') {
+        lastSyncGameId = newestId;
+        spinRoulette(data.newGame);
+        updateRouletteHistoryFull(data.games);
+        return;
+    }
+    if (lastSyncGameId === null) {
+        lastSyncGameId = newestId;
+        initRoulette(data.games);
+    }
+    if (rouletteState === 'waiting' && data.secondsToNext != null) {
+        updateCountdown(data.secondsToNext);
+    }
 }
 
 function setRouletteStatus(state, text) {
@@ -806,13 +821,10 @@ function setRouletteStatus(state, text) {
     const statusText = document.getElementById('roulette-status-text');
     const progress = document.getElementById('roulette-progress');
     if (!bar || !statusText || !progress) return;
-
     bar.className = 'roulette-status-bar';
-
     if (state === 'waiting') {
-        statusText.textContent = 'Esperando...';
+        statusText.textContent = 'Aguardando proximo giro...';
         progress.style.width = '0%';
-        startCountdown();
     } else if (state === 'spinning') {
         bar.classList.add('spinning');
         statusText.textContent = 'Girando...';
@@ -826,20 +838,20 @@ function setRouletteStatus(state, text) {
     }
 }
 
-function startCountdown() {
+function updateCountdown(secondsToNext) {
     stopCountdown();
-    countdownSec = 30;
+    if (secondsToNext <= 0 || rouletteState !== 'waiting') return;
+    let remaining = secondsToNext;
+    const total = blazeCycleTime;
+    const statusText = document.getElementById('roulette-status-text');
+    const progress = document.getElementById('roulette-progress');
+    if (statusText) statusText.textContent = `Girando Em 00:${remaining.toString().padStart(2,'0')}`;
+    if (progress) progress.style.width = ((total - remaining) / total * 100) + '%';
     countdownTimer = setInterval(() => {
-        countdownSec--;
-        if (countdownSec <= 0) { stopCountdown(); return; }
-        const statusText = document.getElementById('roulette-status-text');
-        const progress = document.getElementById('roulette-progress');
-        if (statusText && rouletteState === 'waiting') {
-            statusText.textContent = `Girando Em 00:${countdownSec.toString().padStart(2, '0')}`;
-        }
-        if (progress && rouletteState === 'waiting') {
-            progress.style.width = ((30 - countdownSec) / 30 * 100) + '%';
-        }
+        remaining--;
+        if (remaining <= 0) { stopCountdown(); return; }
+        if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${remaining.toString().padStart(2,'0')}`;
+        if (progress && rouletteState === 'waiting') progress.style.width = ((total - remaining) / total * 100) + '%';
     }, 1000);
 }
 
@@ -847,11 +859,9 @@ function stopCountdown() {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 }
 
-// Atualiza GIROS ANTERIORES inteiro com dados da API (mais recente primeiro)
 function updateRouletteHistoryFull(games) {
     const dots = document.getElementById('roulette-history-dots');
     if (!dots || !games) return;
-
     let html = '';
     games.forEach(g => {
         const roll = parseInt(g.roll);
@@ -860,21 +870,6 @@ function updateRouletteHistoryFull(games) {
         html += `<span class="rh-dot ${cls}" title="${roll}">${label}</span>`;
     });
     dots.innerHTML = html;
-}
-
-// Adiciona UM novo jogo no inicio dos giros anteriores
-function addToRouletteHistory(newGame) {
-    const dots = document.getElementById('roulette-history-dots');
-    if (!dots) return;
-
-    const roll = parseInt(newGame.roll);
-    const cls = colorClasses[colorFromRoll(roll)] || 'white';
-    const dot = document.createElement('span');
-    dot.className = `rh-dot ${cls}`;
-    dot.title = roll;
-    dot.innerHTML = roll === 0 ? '&#10070;' : roll;
-    dots.insertBefore(dot, dots.firstChild);
-    while (dots.children.length > 25) dots.removeChild(dots.lastChild);
 }
 
 // Carrega dados reais da API para a roleta
@@ -925,30 +920,17 @@ function connectWebSocket() {
             try {
                 const msg = JSON.parse(event.data);
 
-                // Jogos recentes para inicializar o carousel
-                if (msg.type === 'recent_games' && msg.data.games) {
-                    initRoulette(msg.data.games);
-                    if (msg.data.games.length > 0) {
-                        lastPolledGameId = msg.data.games[0].game_id;
-                    }
-                }
-
-                // Novo jogo detectado - ANIMAR!
-                if (msg.type === 'new_game' && msg.data.game) {
-                    if (rouletteState !== 'spinning') {
-                        spinRoulette(msg.data.game);
-                    }
+                // SYNC principal - dados da API Blaze em tempo real
+                if (msg.type === 'blaze_sync') {
+                    handleBlazeSync(msg.data);
                 }
 
                 if (msg.type === 'signal') {
-                    // Sinal novo recebido via WebSocket - atualiza banner IMEDIATAMENTE
                     showActiveSignal(msg.data);
                 }
 
                 if (msg.type === 'analysis') {
-                    // Atualiza stats
                     if (msg.data.stats) updateStatsFromData(msg.data.stats);
-                    // Atualiza sinais ativos
                     if (msg.data.signals && msg.data.signals.length > 0) {
                         showActiveSignals(msg.data.signals);
                     }
@@ -956,11 +938,10 @@ function connectWebSocket() {
 
                 if (msg.type === 'stats_update') {
                     if (msg.data.stats) updateStatsFromData(msg.data.stats);
-                    // Recarrega paineis de estrategia
                     refreshStrategyPanels();
                 }
             } catch (e) {
-                console.error('[WS] Erro parse:', e);
+                console.error('[WS] Erro:', e);
             }
         };
 
@@ -1197,18 +1178,14 @@ function updateVal(id, value) {
     }
 }
 
-// Inicia tudo
-loadRouletteState();
+// Inicia - dados vem DIRETO do bot via WebSocket (sincronizado com Blaze)
 connectWebSocket();
 
-// Polling de sinal ativo a cada 3s (rapido!)
+// Polling de sinal ativo a cada 3s (fallback)
 setInterval(refreshActiveSignal, 3000);
 
-// Polling de estado do jogo a cada 5s (fallback para animacao)
-setInterval(pollGameState, 5000);
-
-// Polling completo a cada 5s (stats, estrategias, historico)
-setInterval(refreshDashboard, 5000);
+// Polling stats a cada 10s
+setInterval(refreshDashboard, 10000);
 </script>
 <?php endif; ?>
 
