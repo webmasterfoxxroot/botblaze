@@ -52,32 +52,32 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="admin-dashboard">
-    <h1 class="page-title">Painel Admin</h1>
+    <h1 class="page-title">Painel Admin <span class="badge badge-live" id="live-indicator">TEMPO REAL</span></h1>
 
     <!-- Stats Cards -->
     <div class="stats-grid stats-grid-6">
         <div class="stat-card">
-            <div class="stat-value"><?= $totalUsers ?></div>
+            <div class="stat-value" id="s-totalUsers"><?= $totalUsers ?></div>
             <div class="stat-label">Usuarios Total</div>
         </div>
         <div class="stat-card stat-green">
-            <div class="stat-value"><?= $activeUsers ?></div>
+            <div class="stat-value" id="s-activeUsers"><?= $activeUsers ?></div>
             <div class="stat-label">Usuarios Ativos</div>
         </div>
         <div class="stat-card stat-red">
-            <div class="stat-value"><?= $blockedUsers ?></div>
+            <div class="stat-value" id="s-blockedUsers"><?= $blockedUsers ?></div>
             <div class="stat-label">Bloqueados</div>
         </div>
         <div class="stat-card stat-blue">
-            <div class="stat-value"><?= $activeSubs ?></div>
+            <div class="stat-value" id="s-activeSubs"><?= $activeSubs ?></div>
             <div class="stat-label">Assinaturas Ativas</div>
         </div>
         <div class="stat-card stat-gold">
-            <div class="stat-value">R$ <?= number_format($revenue, 2, ',', '.') ?></div>
+            <div class="stat-value" id="s-revenue">R$ <?= number_format($revenue, 2, ',', '.') ?></div>
             <div class="stat-label">Receita Total</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value"><?= $totalGames ?></div>
+            <div class="stat-value" id="s-totalGames"><?= $totalGames ?></div>
             <div class="stat-label">Rodadas Coletadas</div>
         </div>
     </div>
@@ -85,15 +85,15 @@ require_once __DIR__ . '/../includes/header.php';
     <!-- Sinais Performance -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-value"><?= $signalStats['total'] ?></div>
+            <div class="stat-value" id="s-signalsTotal"><?= $signalStats['total'] ?></div>
             <div class="stat-label">Sinais Gerados</div>
         </div>
         <div class="stat-card stat-green">
-            <div class="stat-value"><?= $signalStats['wins'] ?></div>
+            <div class="stat-value" id="s-wins"><?= $signalStats['wins'] ?></div>
             <div class="stat-label">Wins</div>
         </div>
         <div class="stat-card stat-red">
-            <div class="stat-value"><?= $signalStats['losses'] ?></div>
+            <div class="stat-value" id="s-losses"><?= $signalStats['losses'] ?></div>
             <div class="stat-label">Losses</div>
         </div>
         <div class="stat-card stat-gold">
@@ -101,7 +101,7 @@ require_once __DIR__ . '/../includes/header.php';
             $decided = $signalStats['wins'] + $signalStats['losses'];
             $winRate = $decided > 0 ? round(($signalStats['wins'] / $decided) * 100, 1) : 0;
             ?>
-            <div class="stat-value"><?= $winRate ?>%</div>
+            <div class="stat-value" id="s-winRate"><?= $winRate ?>%</div>
             <div class="stat-label">Win Rate</div>
         </div>
     </div>
@@ -150,7 +150,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="panel-header">
                 <h2>Ultimos Sinais</h2>
             </div>
-            <div class="panel-body">
+            <div class="panel-body" id="signals-table-body">
                 <table class="table">
                     <thead>
                         <tr>
@@ -161,7 +161,7 @@ require_once __DIR__ . '/../includes/header.php';
                             <th>Hora</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="signals-tbody">
                         <?php foreach ($recentSignals as $s): ?>
                         <tr>
                             <td><?= $colorEmojis[$s['predicted_color']] ?> <?= $colorNames[$s['predicted_color']] ?></td>
@@ -185,5 +185,61 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+// Auto-refresh a cada 10 segundos
+function refreshAdmin() {
+    fetch('/api/admin-stats.php')
+        .then(r => r.json())
+        .then(data => {
+            // Atualiza stats com animacao
+            updateStat('s-totalUsers', data.stats.totalUsers);
+            updateStat('s-activeUsers', data.stats.activeUsers);
+            updateStat('s-blockedUsers', data.stats.blockedUsers);
+            updateStat('s-activeSubs', data.stats.activeSubs);
+            updateStat('s-revenue', 'R$ ' + data.stats.revenue);
+            updateStat('s-totalGames', data.stats.totalGames);
+            updateStat('s-signalsTotal', data.stats.signalsTotal);
+            updateStat('s-wins', data.stats.wins);
+            updateStat('s-losses', data.stats.losses);
+            updateStat('s-winRate', data.stats.winRate + '%');
+
+            // Atualiza tabela de sinais
+            const tbody = document.getElementById('signals-tbody');
+            if (tbody && data.signals) {
+                let html = '';
+                data.signals.forEach(s => {
+                    let badge = '';
+                    if (s.result === 'win') badge = '<span class="badge badge-green">WIN</span>';
+                    else if (s.result === 'loss') badge = '<span class="badge badge-red">LOSS</span>';
+                    else badge = '<span class="badge badge-yellow">...</span>';
+
+                    html += `<tr>
+                        <td>${s.color_emoji} ${s.color_name}</td>
+                        <td>${s.confidence}%</td>
+                        <td><small>${s.strategy}</small></td>
+                        <td>${badge}</td>
+                        <td>${s.time}</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+        })
+        .catch(e => console.error('Erro no refresh:', e));
+}
+
+function updateStat(id, value) {
+    const el = document.getElementById(id);
+    if (el && el.textContent != value) {
+        el.textContent = value;
+        el.style.transition = 'color 0.3s';
+        el.style.color = '#ff6a00';
+        setTimeout(() => el.style.color = '', 1000);
+    }
+}
+
+// Atualiza a cada 10 segundos
+setInterval(refreshAdmin, 10000);
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
