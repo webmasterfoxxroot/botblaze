@@ -1,5 +1,4 @@
 const axios = require('axios');
-const BlazeStream = require('./blaze-stream');
 
 class DoubleCollector {
     constructor(db, config) {
@@ -7,58 +6,17 @@ class DoubleCollector {
         this.apiUrl = config.apiUrl;
         this.timer = null;
         this.lastGameId = null;
-        this.onNewGame = null;       // callback quando detecta jogo novo (resultado)
-        this.onGamePhase = null;     // callback para fase do jogo (waiting/rolling/complete)
+        this.onNewGame = null;          // callback: jogo novo detectado
+        this.onSyncUpdate = null;       // callback: envia estado completo pro frontend
         this.collecting = false;
-        this.pollInterval = 3;       // segundos (atualizado pelo bot)
+        this.pollInterval = 1;          // segundos
 
-        // Blaze WebSocket stream (tempo real)
-        this.stream = null;
-        this.wsEnabled = true;
-        this.gamePhase = 'waiting';  // waiting, rolling, complete
-        this.lastPhaseTime = Date.now();
-    }
-
-    // Inicia WebSocket da Blaze (chamado pelo bot apos carregar settings)
-    startStream(wsUrl) {
-        if (!wsUrl) {
-            console.log('[Collector] WS URL nao configurada, usando apenas HTTP polling');
-            return;
-        }
-
-        this.stream = new BlazeStream({ wsUrl });
-
-        // Quando recebe resultado do jogo via WebSocket
-        this.stream.onGameComplete = async (game) => {
-            console.log(`[Collector] WS: Jogo recebido Roll ${game.roll} Color ${game.color}`);
-            await this.processNewGame(game);
-        };
-
-        // Quando o status do jogo muda (para animacao no frontend)
-        this.stream.onGameStatus = (event) => {
-            const status = event.status;
-            let phase = 'waiting';
-            if (status === 'rolling' || status === 'spinning') phase = 'rolling';
-            else if (status === 'complete' || status === 'finished') phase = 'complete';
-            else if (status === 'waiting' || status === 'betting') phase = 'waiting';
-
-            if (phase !== this.gamePhase) {
-                this.gamePhase = phase;
-                this.lastPhaseTime = Date.now();
-                if (this.onGamePhase) {
-                    this.onGamePhase({ phase, game: event.game, timestamp: new Date() });
-                }
-            }
-        };
-
-        this.stream.connect();
-    }
-
-    stopStream() {
-        if (this.stream) {
-            this.stream.disconnect();
-            this.stream = null;
-        }
+        // Sincronizacao com a Blaze
+        this.blazeGames = [];           // lista completa da API (espelho)
+        this.cycleTime = 30;            // tempo medio entre jogos (calculado automaticamente)
+        this.lastGameTime = null;       // timestamp do ultimo jogo detectado
+        this.nextGameEstimate = null;   // quando o proximo jogo deve aparecer
+        this.cycleHistory = [];         // historico de ciclos para media movel
     }
 
     async fetchRecent() {
@@ -81,6 +39,43 @@ class DoubleCollector {
             console.error('[Collector] Erro fetch:', error.message);
             return [];
         }
+    }
+
+    // Calcula o ritmo da Blaze a partir dos timestamps dos jogos
+    calculateCycleTime(games) {
+        if (!games || games.length < 3) return;
+
+        const intervals = [];
+        for (let i = 0; i < Math.min(games.length - 1, 10); i++) {
+            const t1 = new Date(games[i].created_at).getTime();
+            const t2 = new Date(games[i + 1].created_at).getTime();
+            const diff = (t1 - t2) / 1000; // segundos
+            if (diff > 10 && diff < 120) {  // so aceita intervalos razoaveis
+                intervals.push(diff);
+            }
+        }
+
+        if (intervals.length === 0) return;
+
+        // Media dos intervalos = tempo do ciclo
+        const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        this.cycleTime = Math.round(avg);
+
+        console.log(`[Sync] Ciclo Blaze: ${this.cycleTime}s (calculado de ${intervals.length} intervalos: ${intervals.map(i => i.toFixed(0) + 's').join(', ')})`);
+    }
+
+    // Estima quando o proximo jogo vai aparecer na API
+    estimateNextGame() {
+        if (!this.lastGameTime) return null;
+        this.nextGameEstimate = this.lastGameTime + (this.cycleTime * 1000);
+        return this.nextGameEstimate;
+    }
+
+    // Retorna quantos segundos faltam para o proximo jogo
+    getSecondsToNext() {
+        if (!this.nextGameEstimate) return null;
+        const remaining = (this.nextGameEstimate - Date.now()) / 1000;
+        return Math.max(0, Math.round(remaining));
     }
 
     async saveGame(game) {
@@ -121,43 +116,27 @@ class DoubleCollector {
         return rows[0].total;
     }
 
-    // Processa um jogo novo (chamado pelo WS ou HTTP polling)
-    async processNewGame(game) {
-        if (!game || !game.id) return false;
-
-        // Ja processamos esse jogo?
-        if (game.id === this.lastGameId) return false;
-
-        const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
-        const source = game.source || 'http';
-
-        console.log(`\n[NOVO JOGO] Roll ${game.roll} = ${colorNames[game.color]} (ID: ${game.id}) via ${source.toUpperCase()}`);
-
-        // Calcula atraso
-        if (game.created_at) {
-            const gameTime = new Date(game.created_at).getTime();
-            const delay = ((Date.now() - gameTime) / 1000).toFixed(1);
-            console.log(`[Timing] Atraso desde jogo: ${delay}s`);
-        }
-
-        this.lastGameId = game.id;
-
-        // Salva no banco
-        const saved = await this.saveGame(game);
-        const total = await this.getTotalGames();
-        console.log(`[Collector] ${saved ? 'Salvo' : 'Ja existia'} | Total: ${total}`);
-
-        // Dispara callback
-        if (this.onNewGame) {
-            const callbackStart = Date.now();
-            await this.onNewGame(game);
-            console.log(`[Timing] Callback completo em ${Date.now() - callbackStart}ms`);
-        }
-
-        return true;
+    // Monta o estado completo para enviar ao frontend
+    buildSyncState(newGame) {
+        return {
+            games: this.blazeGames,         // lista completa da API (espelho)
+            newGame: newGame || null,        // jogo novo (se acabou de detectar)
+            cycleTime: this.cycleTime,       // tempo do ciclo em segundos
+            lastGameTime: this.lastGameTime, // timestamp do ultimo jogo
+            nextGameEstimate: this.nextGameEstimate,
+            secondsToNext: this.getSecondsToNext(),
+            timestamp: Date.now()
+        };
     }
 
-    // HTTP polling - fallback quando WS nao esta disponivel
+    // Envia estado completo para o frontend
+    broadcastSync(newGame) {
+        if (this.onSyncUpdate) {
+            this.onSyncUpdate(this.buildSyncState(newGame));
+        }
+    }
+
+    // Polling principal - le a API e detecta mudancas
     async collect() {
         if (this.collecting) return false;
         this.collecting = true;
@@ -172,32 +151,85 @@ class DoubleCollector {
                 return false;
             }
 
+            // Atualiza espelho da API
+            this.blazeGames = games;
+
             const newestId = games[0]?.id;
 
-            // Primeira execucao: salva tudo e memoriza
+            // === PRIMEIRA EXECUCAO: aprende o ritmo ===
             if (this.lastGameId === null) {
                 this.lastGameId = newestId;
+                this.lastGameTime = new Date(games[0].created_at).getTime();
+
+                // Calcula ciclo a partir do historico da API
+                this.calculateCycleTime(games);
+                this.estimateNextGame();
+
                 const saved = await this.saveGames(games);
                 const total = await this.getTotalGames();
-                console.log(`[Collector] Inicial: Salvou ${saved} | Total: ${total} | API: ${fetchTime}ms`);
+                console.log(`[Collector] Inicial: ${saved} salvos | Total: ${total} | API: ${fetchTime}ms`);
+                console.log(`[Sync] Proximo jogo estimado em ~${this.getSecondsToNext()}s`);
+
+                // Envia estado inicial para dashboards
+                this.broadcastSync(null);
+
                 this.collecting = false;
                 return saved > 0;
             }
 
-            // Sem jogo novo
+            // === SEM JOGO NOVO: atualiza countdown ===
             if (newestId === this.lastGameId) {
+                // Envia update de timing (countdown atualizado)
+                this.broadcastSync(null);
                 this.collecting = false;
                 return false;
             }
 
-            // JOGO NOVO via HTTP!
+            // === JOGO NOVO DETECTADO! ===
             const newest = games[0];
-            newest.source = 'http';
+            const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
 
-            // Salva todos os jogos que vieram (podem ter pulado algum)
+            // Calcula atraso real
+            const newGameTime = new Date(newest.created_at).getTime();
+            const delay = ((Date.now() - newGameTime) / 1000).toFixed(1);
+
+            // Atualiza ciclo real (diferenca entre este jogo e o anterior)
+            if (this.lastGameTime) {
+                const realCycle = (newGameTime - this.lastGameTime) / 1000;
+                if (realCycle > 10 && realCycle < 120) {
+                    this.cycleHistory.push(realCycle);
+                    if (this.cycleHistory.length > 20) this.cycleHistory.shift();
+
+                    // Media movel dos ultimos ciclos reais
+                    const avg = this.cycleHistory.reduce((a, b) => a + b, 0) / this.cycleHistory.length;
+                    this.cycleTime = Math.round(avg);
+                }
+            }
+
+            console.log(`\n[NOVO JOGO] Roll ${newest.roll} = ${colorNames[newest.color]} (ID: ${newestId})`);
+            console.log(`[Timing] API: ${fetchTime}ms | Atraso: ${delay}s | Ciclo: ${this.cycleTime}s`);
+
+            this.lastGameId = newestId;
+            this.lastGameTime = newGameTime;
+
+            // Estima proximo jogo
+            this.estimateNextGame();
+            console.log(`[Sync] Proximo jogo em ~${this.getSecondsToNext()}s`);
+
+            // Salva no banco
             await this.saveGames(games);
+            const total = await this.getTotalGames();
+            console.log(`[Collector] Total: ${total}`);
 
-            await this.processNewGame(newest);
+            // Envia estado completo com jogo novo para dashboards
+            this.broadcastSync(newest);
+
+            // Dispara callback para analise/sinais
+            if (this.onNewGame) {
+                const callbackStart = Date.now();
+                await this.onNewGame(newest);
+                console.log(`[Timing] Analise completa em ${Date.now() - callbackStart}ms`);
+            }
 
             this.collecting = false;
             return true;
@@ -208,19 +240,18 @@ class DoubleCollector {
         }
     }
 
-    // Retorna info de status para o frontend
     getStatus() {
         return {
-            wsConnected: this.stream ? this.stream.isConnected() : false,
             lastGameId: this.lastGameId,
-            gamePhase: this.gamePhase,
-            lastPhaseTime: this.lastPhaseTime,
-            pollInterval: this.pollInterval
+            cycleTime: this.cycleTime,
+            secondsToNext: this.getSecondsToNext(),
+            pollInterval: this.pollInterval,
+            totalGamesApi: this.blazeGames.length
         };
     }
 
     start() {
-        console.log(`[Collector] Monitorando API a cada ${this.pollInterval}s...`);
+        console.log(`[Collector] Monitorando Blaze API a cada ${this.pollInterval}s...`);
         this.collect();
         this.timer = setInterval(() => this.collect(), this.pollInterval * 1000);
     }
@@ -230,11 +261,6 @@ class DoubleCollector {
             clearInterval(this.timer);
             this.timer = null;
         }
-    }
-
-    stopAll() {
-        this.stop();
-        this.stopStream();
     }
 }
 

@@ -562,13 +562,14 @@ const strategyNames = { 'sequences': 'Sequencias', 'frequency': 'Frequencia', 'm
 let lastSignalId = null;
 let wsConnected = false;
 
-// === ROLETA VISUAL ===
+// === SINCRONIZACAO COM A BLAZE ===
 const rouletteGames = [];
-let rouletteState = 'waiting';
+let rouletteState = 'waiting'; // waiting, spinning, result
 let countdownTimer = null;
-let countdownSec = 0;
+let blazeCycleTime = 30;       // tempo do ciclo (auto-detectado pelo bot)
+let blazeNextGame = null;      // timestamp estimado do proximo jogo
+let lastSyncGameId = null;     // ID do ultimo jogo sincronizado
 
-// Deriva cor do roll (defesa: nao depende do campo color)
 function colorFromRoll(roll) {
     roll = parseInt(roll);
     if (roll === 0) return 0;
@@ -585,16 +586,46 @@ function createCardHTML(game) {
     if (color === 0) return `<div class="roulette-card ${cls}"><div class="roulette-card-inner"><span class="rc-icon">&#10070;</span></div></div>`;
     return `<div class="roulette-card ${cls}"><div class="roulette-card-inner">${roll}</div></div>`;
 }
-// Gera cards aleatorios SOMENTE para animacao de spin (nao para exibicao estatica)
 function generateSpinCards(count) {
     const cards = [];
     for (let i = 0; i < count; i++) {
         const roll = Math.floor(Math.random() * 15);
-        const color = roll === 0 ? 0 : (roll <= 7 ? 1 : 2);
-        cards.push({ roll, color });
+        cards.push({ roll, color: roll === 0 ? 0 : (roll <= 7 ? 1 : 2) });
     }
     return cards;
 }
+
+// === HANDLER PRINCIPAL: recebe blaze_sync do bot ===
+function handleBlazeSync(data) {
+    if (!data || !data.games || data.games.length === 0) return;
+
+    // Atualiza timing
+    if (data.cycleTime) blazeCycleTime = data.cycleTime;
+    if (data.nextGameEstimate) blazeNextGame = data.nextGameEstimate;
+
+    const newestId = data.games[0].id || data.games[0].game_id;
+
+    // JOGO NOVO DETECTADO - anima!
+    if (data.newGame && newestId !== lastSyncGameId && rouletteState !== 'spinning') {
+        lastSyncGameId = newestId;
+        spinRoulette(data.newGame);
+        // Atualiza GIROS ANTERIORES com dados DIRETO da API (espelho perfeito)
+        updateRouletteHistoryFull(data.games);
+        return;
+    }
+
+    // Primeira carga ou update sem jogo novo
+    if (lastSyncGameId === null) {
+        lastSyncGameId = newestId;
+        initRoulette(data.games);
+    }
+
+    // Atualiza countdown com timing do bot
+    if (rouletteState === 'waiting' && data.secondsToNext !== null && data.secondsToNext !== undefined) {
+        updateCountdown(data.secondsToNext);
+    }
+}
+
 function initRoulette(games) {
     if (!games || games.length === 0) return;
     const chrono = [...games].reverse();
@@ -602,7 +633,6 @@ function initRoulette(games) {
     chrono.forEach(g => rouletteGames.push(g));
     renderRouletteStatic();
     setRouletteStatus('waiting');
-    // Atualiza GIROS ANTERIORES com dados reais
     updateRouletteHistoryFull(games);
 }
 function renderRouletteStatic() {
@@ -611,12 +641,10 @@ function renderRouletteStatic() {
     const viewport = track.parentElement;
     const vpWidth = viewport ? viewport.offsetWidth : 800;
     const cardWidth = window.innerWidth <= 768 ? 78 : 98;
-    // Mostra TODOS os jogos reais no carousel (sem cards falsos)
     let html = '';
     rouletteGames.forEach(g => html += createCardHTML(g));
     track.classList.add('no-transition');
     track.innerHTML = html;
-    // Posiciona para que o ULTIMO jogo (mais recente) fique no centro
     const lastIndex = rouletteGames.length - 1;
     const offset = lastIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
     track.style.transform = `translateX(-${Math.max(0, offset)}px)`;
@@ -630,13 +658,12 @@ function spinRoulette(newGame) {
     const viewport = track.parentElement;
     const vpWidth = viewport ? viewport.offsetWidth : 800;
     const cardWidth = window.innerWidth <= 768 ? 78 : 98;
-    // Ultimos jogos reais + cards aleatorios para animacao + resultado final
     const realBefore = rouletteGames.slice(-5);
     const spinCards = generateSpinCards(25);
     let html = '';
     realBefore.forEach(g => html += createCardHTML(g));
     spinCards.forEach(g => html += createCardHTML(g));
-    html += createCardHTML(newGame); // O resultado REAL no final
+    html += createCardHTML(newGame);
     track.classList.add('no-transition');
     track.innerHTML = html;
     track.style.transform = `translateX(0px)`;
@@ -650,15 +677,15 @@ function spinRoulette(newGame) {
     });
     setTimeout(() => {
         rouletteState = 'result';
-        setRouletteStatus('result', `Blaze Girou ${newGame.roll}!`);
+        const roll = parseInt(newGame.roll);
+        setRouletteStatus('result', `Blaze Girou ${roll}!`);
         rouletteGames.push(newGame);
         if (rouletteGames.length > 20) rouletteGames.shift();
-        addToRouletteHistory(newGame);
         setTimeout(() => {
             rouletteState = 'waiting';
             setRouletteStatus('waiting');
             renderRouletteStatic();
-        }, 5000);
+        }, 4000);
     }, 3500);
 }
 function setRouletteStatus(state, text) {
@@ -667,24 +694,42 @@ function setRouletteStatus(state, text) {
     const progress = document.getElementById('roulette-progress');
     if (!bar || !statusText || !progress) return;
     bar.className = 'roulette-status-bar';
-    if (state === 'waiting') { statusText.textContent = 'Esperando...'; progress.style.width = '0%'; startCountdown(); }
-    else if (state === 'spinning') { bar.classList.add('spinning'); statusText.textContent = 'Girando...'; progress.style.width = '100%'; stopCountdown(); }
-    else if (state === 'result') { bar.classList.add('result'); statusText.textContent = text || 'Resultado!'; progress.style.width = '0%'; stopCountdown(); }
+    if (state === 'waiting') {
+        statusText.textContent = 'Aguardando proximo giro...';
+        progress.style.width = '0%';
+    } else if (state === 'spinning') {
+        bar.classList.add('spinning');
+        statusText.textContent = 'Girando...';
+        progress.style.width = '100%';
+        stopCountdown();
+    } else if (state === 'result') {
+        bar.classList.add('result');
+        statusText.textContent = text || 'Resultado!';
+        progress.style.width = '0%';
+        stopCountdown();
+    }
 }
-function startCountdown() {
+// Countdown SINCRONIZADO com o ciclo da Blaze (recebe segundos restantes do bot)
+function updateCountdown(secondsToNext) {
     stopCountdown();
-    countdownSec = 30;
+    if (secondsToNext <= 0 || rouletteState !== 'waiting') return;
+    let remaining = secondsToNext;
+    const total = blazeCycleTime;
+    const statusText = document.getElementById('roulette-status-text');
+    const progress = document.getElementById('roulette-progress');
+    // Atualiza imediatamente
+    if (statusText) statusText.textContent = `Girando Em 00:${remaining.toString().padStart(2,'0')}`;
+    if (progress) progress.style.width = ((total - remaining) / total * 100) + '%';
+    // Continua contando localmente ate proximo sync
     countdownTimer = setInterval(() => {
-        countdownSec--;
-        if (countdownSec <= 0) { stopCountdown(); return; }
-        const statusText = document.getElementById('roulette-status-text');
-        const progress = document.getElementById('roulette-progress');
-        if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${countdownSec.toString().padStart(2,'0')}`;
-        if (progress && rouletteState === 'waiting') progress.style.width = ((30 - countdownSec) / 30 * 100) + '%';
+        remaining--;
+        if (remaining <= 0) { stopCountdown(); return; }
+        if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${remaining.toString().padStart(2,'0')}`;
+        if (progress && rouletteState === 'waiting') progress.style.width = ((total - remaining) / total * 100) + '%';
     }, 1000);
 }
 function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
-// Atualiza GIROS ANTERIORES inteiro com dados da API (mais recente primeiro)
+
 function updateRouletteHistoryFull(games) {
     const dots = document.getElementById('roulette-history-dots');
     if (!dots || !games) return;
@@ -697,58 +742,8 @@ function updateRouletteHistoryFull(games) {
     });
     dots.innerHTML = html;
 }
-// Adiciona UM novo jogo no inicio dos giros anteriores
-function addToRouletteHistory(newGame) {
-    const dots = document.getElementById('roulette-history-dots');
-    if (!dots) return;
-    const roll = parseInt(newGame.roll);
-    const cls = colorClasses[colorFromRoll(roll)] || 'white';
-    const dot = document.createElement('span');
-    dot.className = `rh-dot ${cls}`;
-    dot.title = roll;
-    dot.innerHTML = roll === 0 ? '&#10070;' : roll;
-    dots.insertBefore(dot, dots.firstChild);
-    while (dots.children.length > 25) dots.removeChild(dots.lastChild);
-}
-// Recebe fase do jogo via WebSocket da Blaze (via bot)
-function handleGamePhase(phase) {
-    if (phase === 'waiting') {
-        if (rouletteState !== 'spinning') {
-            setRouletteStatus('waiting');
-            rouletteState = 'waiting';
-        }
-    } else if (phase === 'rolling') {
-        if (rouletteState !== 'spinning') {
-            setRouletteStatus('spinning');
-            rouletteState = 'spinning';
-        }
-    } else if (phase === 'complete') {
-        // Resultado - o new_game event vai disparar a animacao
-    }
-}
 
-function loadRouletteState() {
-    fetch('/api/game-state.php')
-        .then(r => r.json())
-        .then(data => { if (data.games && data.games.length > 0) initRoulette(data.games); })
-        .catch(() => {});
-}
-let lastPolledGameId = null;
-function pollGameState() {
-    fetch('/api/game-state.php')
-        .then(r => r.json())
-        .then(data => {
-            if (!data.lastGame) return;
-            const gameId = data.lastGame.game_id;
-            if (lastPolledGameId === null) { lastPolledGameId = gameId; return; }
-            if (gameId !== lastPolledGameId && rouletteState !== 'spinning') {
-                lastPolledGameId = gameId;
-                spinRoulette(data.lastGame);
-            }
-        }).catch(() => {});
-}
-
-// === WebSocket para receber sinais em tempo real do bot ===
+// === WebSocket: recebe TUDO do bot ===
 function connectWebSocket() {
     try {
         const wsPort = <?= json_encode(getenv('BOT_PORT') ?: '3001') ?>;
@@ -757,22 +752,17 @@ function connectWebSocket() {
 
         ws.onopen = () => {
             wsConnected = true;
-            console.log('[WS] Conectado ao bot');
             const indicator = document.getElementById('live-indicator');
-            if (indicator) { indicator.textContent = 'TEMPO REAL'; indicator.className = 'badge badge-live'; }
+            if (indicator) { indicator.textContent = 'SINCRONIZADO'; indicator.className = 'badge badge-live'; }
         };
 
         ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
 
-                if (msg.type === 'recent_games' && msg.data.games) {
-                    initRoulette(msg.data.games);
-                    if (msg.data.games.length > 0) lastPolledGameId = msg.data.games[0].game_id;
-                }
-
-                if (msg.type === 'new_game' && msg.data.game) {
-                    if (rouletteState !== 'spinning') spinRoulette(msg.data.game);
+                // SYNC principal - dados da API Blaze em tempo real
+                if (msg.type === 'blaze_sync') {
+                    handleBlazeSync(msg.data);
                 }
 
                 if (msg.type === 'signal') {
@@ -791,44 +781,21 @@ function connectWebSocket() {
                     if (msg.data.stats) updateAdminSignalStats(msg.data.stats);
                     refreshStrategyPanels();
                 }
-
-                // Fase do jogo via Blaze WS (tempo real perfeito)
-                if (msg.type === 'game_phase' && msg.data) {
-                    handleGamePhase(msg.data.phase);
-                }
-
-                // Status do collector (mostra se WS da Blaze esta conectado)
-                if (msg.type === 'collector_status' && msg.data) {
-                    const indicator = document.getElementById('live-indicator');
-                    if (indicator) {
-                        if (msg.data.wsConnected) {
-                            indicator.textContent = 'WS TEMPO REAL';
-                            indicator.className = 'badge badge-live';
-                        } else {
-                            indicator.textContent = 'HTTP POLLING';
-                            indicator.className = 'badge badge-yellow';
-                        }
-                    }
-                }
             } catch (e) {
-                console.error('[WS] Erro parse:', e);
+                console.error('[WS] Erro:', e);
             }
         };
 
         ws.onclose = () => {
             wsConnected = false;
-            console.log('[WS] Desconectado. Reconectando em 5s...');
             const indicator = document.getElementById('live-indicator');
             if (indicator) { indicator.textContent = 'RECONECTANDO'; indicator.className = 'badge badge-yellow'; }
-            setTimeout(connectWebSocket, 5000);
+            setTimeout(connectWebSocket, 3000);
         };
 
-        ws.onerror = () => {
-            ws.close();
-        };
+        ws.onerror = () => ws.close();
     } catch (e) {
-        console.log('[WS] Sem WebSocket, usando polling');
-        setTimeout(connectWebSocket, 10000);
+        setTimeout(connectWebSocket, 5000);
     }
 }
 
@@ -1007,18 +974,14 @@ function updateStat(id, value) {
     }
 }
 
-// Inicia tudo
-loadRouletteState();
+// Inicia tudo - dados vem DIRETO do bot via WebSocket (sincronizado com API Blaze)
 connectWebSocket();
 
-// Polling de sinal ativo a cada 3s
+// Polling de sinal ativo a cada 3s (fallback)
 setInterval(refreshActiveSignal, 3000);
 
-// Polling de estado do jogo a cada 2s (rapido para sincronia)
-setInterval(pollGameState, 2000);
-
-// Polling completo admin a cada 5s
-setInterval(refreshAdmin, 5000);
+// Polling admin stats a cada 10s (apenas stats, nao jogos)
+setInterval(refreshAdmin, 10000);
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
