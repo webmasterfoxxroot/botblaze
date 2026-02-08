@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) AS losses,
             COALESCE(SUM(profit), 0)                      AS profit
         FROM bet_history
-        WHERE user_id = ? AND DATE(created_at) = date('now')
+        WHERE user_id = ? AND DATE(created_at) = CURDATE()
     ");
     $stmt->execute([$user['id']]);
     $todayStats = $stmt->fetch();
@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = $db->prepare("
         SELECT us.max_bets_per_day, COUNT(bh.id) AS bets_today
         FROM user_settings us
-        LEFT JOIN bet_history bh ON bh.user_id = us.user_id AND DATE(bh.created_at) = date('now')
+        LEFT JOIN bet_history bh ON bh.user_id = us.user_id AND DATE(bh.created_at) = CURDATE()
         WHERE us.user_id = ?
         GROUP BY us.user_id
     ");
