@@ -1,0 +1,11 @@
+# BotBlaze - Apache config
+# Pass Authorization header to PHP
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Protect sensitive files
+<FilesMatch "^\.env$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>

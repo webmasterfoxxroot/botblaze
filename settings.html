@@ -104,12 +104,12 @@
     <script>
     const API_URL = window.location.origin + '/api';
     const token = localStorage.getItem('botblaze_token');
-    if (!token) window.location.href = '/web/login.html';
+    if (!token) window.location.href = '/login.html';
 
     document.getElementById('logout-btn').addEventListener('click', () => {
         localStorage.removeItem('botblaze_token');
         localStorage.removeItem('botblaze_user');
-        window.location.href = '/web/login.html';
+        window.location.href = '/login.html';
     });
 
     const fields = ['bet_amount', 'strategy', 'martingale_enabled', 'martingale_max', 'martingale_multiplier', 'stop_loss', 'stop_gain', 'max_bets_per_day', 'auto_bet'];

@@ -117,13 +117,13 @@
     const token = localStorage.getItem('botblaze_token');
     const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
 
-    if (!token) window.location.href = '/web/login.html';
+    if (!token) window.location.href = '/login.html';
 
     document.getElementById('user-name').textContent = user.name || '';
     document.getElementById('logout-btn').addEventListener('click', () => {
         localStorage.removeItem('botblaze_token');
         localStorage.removeItem('botblaze_user');
-        window.location.href = '/web/login.html';
+        window.location.href = '/login.html';
     });
 
     function copyToken() {

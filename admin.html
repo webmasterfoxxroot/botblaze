@@ -74,13 +74,13 @@
     const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
 
     if (!token || user.role !== 'admin') {
-        window.location.href = '/web/login.html';
+        window.location.href = '/login.html';
     }
 
     document.getElementById('logout-btn').addEventListener('click', () => {
         localStorage.removeItem('botblaze_token');
         localStorage.removeItem('botblaze_user');
-        window.location.href = '/web/login.html';
+        window.location.href = '/login.html';
     });
 
     // Admin uses a dedicated endpoint (or we can extend auth.php)
@@ -99,7 +99,7 @@
             });
             const data = await res.json();
             if (!data.user || data.user.role !== 'admin') {
-                window.location.href = '/web/login.html';
+                window.location.href = '/login.html';
             }
         } catch (err) {
             console.error(err);

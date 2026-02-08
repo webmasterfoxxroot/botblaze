@@ -77,9 +77,9 @@
             localStorage.setItem('botblaze_user', JSON.stringify(data.user));
 
             if (data.user.role === 'admin') {
-                window.location.href = '/web/admin.html';
+                window.location.href = '/admin.html';
             } else {
-                window.location.href = '/web/dashboard.html';
+                window.location.href = '/dashboard.html';
             }
         } catch (err) {
             errorMsg.textContent = 'Erro de conexao. Tente novamente.';
