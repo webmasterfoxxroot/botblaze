@@ -61,6 +61,29 @@ foreach ($signals as $s) {
     ];
 }
 
+// Stats por estrategia
+$strategyStats = $db->query("
+    SELECT
+        strategy_used,
+        COUNT(*) as total,
+        SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
+        SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses
+    FROM signals WHERE game_type = 'double'
+    GROUP BY strategy_used ORDER BY strategy_used
+")->fetchAll();
+
+$strategyList = [];
+foreach ($strategyStats as $st) {
+    $d = $st['wins'] + $st['losses'];
+    $strategyList[] = [
+        'strategy' => $st['strategy_used'],
+        'total' => (int)$st['total'],
+        'wins' => (int)$st['wins'],
+        'losses' => (int)$st['losses'],
+        'winRate' => $d > 0 ? round(($st['wins'] / $d) * 100, 1) : 0
+    ];
+}
+
 echo json_encode([
     'stats' => [
         'totalUsers' => (int)$totalUsers,
@@ -74,5 +97,6 @@ echo json_encode([
         'losses' => (int)$signalStats['losses'],
         'winRate' => $winRate
     ],
-    'signals' => $signalList
+    'signals' => $signalList,
+    'strategies' => $strategyList
 ]);
