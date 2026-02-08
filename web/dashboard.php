@@ -263,10 +263,13 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <div class="panel-body">
             <div class="color-history" id="color-history">
-                <?php foreach ($lastGames as $game): ?>
-                    <span class="history-dot <?= $colorClasses[$game['color']] ?>"
-                          title="Roll: <?= $game['roll'] ?> | <?= date('H:i:s', strtotime($game['played_at'])) ?>">
-                        <?= $game['roll'] ?>
+                <?php foreach ($lastGames as $game):
+                    $r = (int)$game['roll'];
+                    $c = $r === 0 ? 'white' : ($r <= 7 ? 'red' : 'black');
+                ?>
+                    <span class="history-dot <?= $c ?>"
+                          title="Roll: <?= $r ?> | <?= date('H:i:s', strtotime($game['played_at'])) ?>">
+                        <?= $r ?>
                     </span>
                 <?php endforeach; ?>
             </div>
@@ -275,7 +278,11 @@ require_once __DIR__ . '/includes/header.php';
             <div class="color-stats">
                 <?php
                 $colorCounts = [0 => 0, 1 => 0, 2 => 0];
-                foreach ($lastGames as $g) $colorCounts[$g['color']]++;
+                foreach ($lastGames as $g) {
+                    $r = (int)$g['roll'];
+                    $cc = $r === 0 ? 0 : ($r <= 7 ? 1 : 2);
+                    $colorCounts[$cc]++;
+                }
                 $total = count($lastGames) ?: 1;
                 ?>
                 <div class="color-bar" id="color-bar">
@@ -840,14 +847,6 @@ function stopCountdown() {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 }
 
-// Deriva cor do roll (defesa: nao depende do campo color)
-function colorFromRoll(roll) {
-    roll = parseInt(roll);
-    if (roll === 0) return 0;
-    if (roll <= 7) return 1;
-    return 2;
-}
-
 // Atualiza GIROS ANTERIORES inteiro com dados da API (mais recente primeiro)
 function updateRouletteHistoryFull(games) {
     const dots = document.getElementById('roulette-history-dots');
@@ -1149,9 +1148,10 @@ function refreshDashboard() {
             if (history && data.games) {
                 let html = '';
                 data.games.forEach(g => {
-                    const cls = colorClasses[g.color];
+                    const roll = parseInt(g.roll);
+                    const cls = colorClasses[colorFromRoll(roll)];
                     const time = new Date(g.played_at).toLocaleTimeString('pt-BR');
-                    html += '<span class="history-dot ' + cls + '" title="Roll: ' + g.roll + ' | ' + time + '">' + g.roll + '</span>';
+                    html += '<span class="history-dot ' + cls + '" title="Roll: ' + roll + ' | ' + time + '">' + roll + '</span>';
                 });
                 history.innerHTML = html;
             }

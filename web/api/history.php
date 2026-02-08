@@ -20,10 +20,12 @@ $stmt->bindValue(1, $limit, PDO::PARAM_INT);
 $stmt->execute();
 $games = $stmt->fetchAll();
 
-// Stats de distribuicao
+// Stats de distribuicao (cor derivada do roll: 0=branco, 1-7=vermelho, 8-14=preto)
 $counts = [0 => 0, 1 => 0, 2 => 0];
 foreach ($games as $g) {
-    $counts[$g['color']]++;
+    $r = (int)$g['roll'];
+    $cc = $r === 0 ? 0 : ($r <= 7 ? 1 : 2);
+    $counts[$cc]++;
 }
 $total = count($games) ?: 1;
 
