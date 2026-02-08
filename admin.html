@@ -5,6 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - BotBlaze</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+        .filter-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); cursor: pointer; font-size: 13px; transition: all .2s; }
+        .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+        .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .filter-count { font-size: 11px; opacity: .7; margin-left: 4px; }
+
+        .row-admin { background: rgba(231, 76, 60, 0.06); }
+        .role-admin { background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .role-user { background: rgba(255,255,255,0.08); color: var(--text-muted); padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+
+        .actions-cell { display: flex; gap: 4px; flex-wrap: wrap; }
+        .btn-action { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); cursor: pointer; font-size: 11px; transition: all .15s; white-space: nowrap; }
+        .btn-action:hover { border-color: var(--accent); color: var(--text); }
+        .btn-action.btn-danger { border-color: #e74c3c; color: #e74c3c; }
+        .btn-action.btn-danger:hover { background: #e74c3c; color: #fff; }
+        .btn-action.btn-success { border-color: #2ecc71; color: #2ecc71; }
+        .btn-action.btn-success:hover { background: #2ecc71; color: #fff; }
+        .btn-action.btn-warn { border-color: #f39c12; color: #f39c12; }
+        .btn-action.btn-warn:hover { background: #f39c12; color: #fff; }
+
+        .search-bar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+        .search-input { flex: 1; max-width: 320px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text); font-size: 14px; }
+        .search-input::placeholder { color: var(--text-muted); }
+        .user-count { color: var(--text-muted); font-size: 13px; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 400px; max-width: 90vw; }
+        .modal h3 { margin-bottom: 16px; font-size: 18px; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+        .modal .btn { padding: 8px 20px; }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 24px; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 600; z-index: 2000; animation: slideIn .3s ease; }
+        .toast-success { background: #2ecc71; }
+        .toast-error { background: #e74c3c; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -42,7 +81,23 @@
         <div class="card">
             <div class="card-header">
                 <h2>Usuarios</h2>
+                <span class="user-count" id="user-count"></span>
             </div>
+
+            <div class="search-bar">
+                <input type="text" class="search-input" id="search-input" placeholder="Buscar por nome ou email...">
+            </div>
+
+            <div class="filter-bar" id="filter-bar">
+                <button class="filter-btn active" data-filter="all">Todos <span class="filter-count" id="fc-all"></span></button>
+                <button class="filter-btn" data-filter="admin">Admin <span class="filter-count" id="fc-admin"></span></button>
+                <button class="filter-btn" data-filter="user">Usuarios <span class="filter-count" id="fc-user"></span></button>
+                <button class="filter-btn" data-filter="active">Ativos <span class="filter-count" id="fc-active"></span></button>
+                <button class="filter-btn" data-filter="blocked">Bloqueados <span class="filter-count" id="fc-blocked"></span></button>
+                <button class="filter-btn" data-filter="with_plan">Com Plano <span class="filter-count" id="fc-with_plan"></span></button>
+                <button class="filter-btn" data-filter="no_plan">Sem Plano <span class="filter-count" id="fc-no_plan"></span></button>
+            </div>
+
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -50,16 +105,63 @@
                             <th>ID</th>
                             <th>Nome</th>
                             <th>Email</th>
+                            <th>Tipo</th>
                             <th>Status</th>
                             <th>Plano</th>
                             <th>Expira</th>
                             <th>Cadastro</th>
+                            <th>Acoes</th>
                         </tr>
                     </thead>
                     <tbody id="users-table">
-                        <tr><td colspan="7" style="text-align:center; color: var(--text-muted);">Carregando...</td></tr>
+                        <tr><td colspan="9" style="text-align:center; color: var(--text-muted);">Carregando...</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Atribuir Plano -->
+    <div class="modal-overlay" id="modal-plan">
+        <div class="modal">
+            <h3>Atribuir Plano</h3>
+            <p style="color: var(--text-muted); margin-bottom: 12px;">Usuario: <strong id="modal-plan-user"></strong></p>
+            <div class="form-group">
+                <label class="form-label">Selecione o Plano</label>
+                <select id="modal-plan-select" class="form-input"></select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('modal-plan')">Cancelar</button>
+                <button class="btn btn-primary" id="modal-plan-confirm">Atribuir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Resetar Senha -->
+    <div class="modal-overlay" id="modal-password">
+        <div class="modal">
+            <h3>Resetar Senha</h3>
+            <p style="color: var(--text-muted); margin-bottom: 12px;">Usuario: <strong id="modal-pw-user"></strong></p>
+            <div class="form-group">
+                <label class="form-label">Nova Senha</label>
+                <input type="text" id="modal-pw-input" class="form-input" placeholder="Minimo 6 caracteres" minlength="6">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('modal-password')">Cancelar</button>
+                <button class="btn btn-primary" id="modal-pw-confirm">Alterar Senha</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Exclusao -->
+    <div class="modal-overlay" id="modal-delete">
+        <div class="modal">
+            <h3 style="color: #e74c3c;">Excluir Usuario</h3>
+            <p style="color: var(--text-muted);">Tem certeza que deseja excluir <strong id="modal-del-user"></strong>?</p>
+            <p style="color: #e74c3c; font-size: 13px; margin-top: 8px;">Esta acao e irreversivel. Todos os dados do usuario serao apagados.</p>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('modal-delete')">Cancelar</button>
+                <button class="btn btn-primary" style="background: #e74c3c; border-color: #e74c3c;" id="modal-del-confirm">Excluir</button>
             </div>
         </div>
     </div>
@@ -71,9 +173,9 @@
     <script>
     const API_URL = window.location.origin + '/api';
     const token = localStorage.getItem('botblaze_token');
-    const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
+    const currentUser = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
 
-    if (!token || user.role !== 'admin') {
+    if (!token || currentUser.role !== 'admin') {
         window.location.href = '/login.html';
     }
 
@@ -82,6 +184,233 @@
         localStorage.removeItem('botblaze_user');
         window.location.href = '/login.html';
     });
+
+    let allUsers = [];
+    let allPlans = [];
+    let currentFilter = 'all';
+    let searchQuery = '';
+
+    // ── FILTERS ──────────────────────────────────────────────────────────────
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter;
+            renderUsers();
+        });
+    });
+
+    document.getElementById('search-input').addEventListener('input', (e) => {
+        searchQuery = e.target.value.toLowerCase();
+        renderUsers();
+    });
+
+    function filterUsers() {
+        let filtered = allUsers;
+
+        // Apply filter
+        switch (currentFilter) {
+            case 'admin':     filtered = filtered.filter(u => u.role === 'admin'); break;
+            case 'user':      filtered = filtered.filter(u => u.role === 'user'); break;
+            case 'active':    filtered = filtered.filter(u => u.status === 'active'); break;
+            case 'blocked':   filtered = filtered.filter(u => u.status === 'blocked'); break;
+            case 'with_plan': filtered = filtered.filter(u => u.plan_name); break;
+            case 'no_plan':   filtered = filtered.filter(u => !u.plan_name); break;
+        }
+
+        // Apply search
+        if (searchQuery) {
+            filtered = filtered.filter(u =>
+                u.name.toLowerCase().includes(searchQuery) ||
+                u.email.toLowerCase().includes(searchQuery)
+            );
+        }
+
+        return filtered;
+    }
+
+    function updateFilterCounts() {
+        document.getElementById('fc-all').textContent = '(' + allUsers.length + ')';
+        document.getElementById('fc-admin').textContent = '(' + allUsers.filter(u => u.role === 'admin').length + ')';
+        document.getElementById('fc-user').textContent = '(' + allUsers.filter(u => u.role === 'user').length + ')';
+        document.getElementById('fc-active').textContent = '(' + allUsers.filter(u => u.status === 'active').length + ')';
+        document.getElementById('fc-blocked').textContent = '(' + allUsers.filter(u => u.status === 'blocked').length + ')';
+        document.getElementById('fc-with_plan').textContent = '(' + allUsers.filter(u => u.plan_name).length + ')';
+        document.getElementById('fc-no_plan').textContent = '(' + allUsers.filter(u => !u.plan_name).length + ')';
+    }
+
+    // ── RENDER ───────────────────────────────────────────────────────────────
+
+    function renderUsers() {
+        const filtered = filterUsers();
+        const tbody = document.getElementById('users-table');
+        document.getElementById('user-count').textContent = filtered.length + ' de ' + allUsers.length + ' usuarios';
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--text-muted); padding: 32px;">Nenhum usuario encontrado</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(u => {
+            const isAdmin = u.role === 'admin';
+            const isMe = u.id == currentUser.id;
+            const rowClass = isAdmin ? 'row-admin' : '';
+            const roleHtml = isAdmin ? '<span class="role-admin">Admin</span>' : '<span class="role-user">Usuario</span>';
+            const statusClass = u.status === 'active' ? 'badge-green' : 'badge-red';
+            const statusText = u.status === 'active' ? 'Ativo' : 'Bloqueado';
+            const plan = u.plan_name || '<span style="color:var(--text-muted)">Sem plano</span>';
+            const expires = u.expires_at ? new Date(u.expires_at).toLocaleDateString('pt-BR') : '-';
+            const created = new Date(u.created_at).toLocaleDateString('pt-BR');
+
+            // Action buttons
+            let actions = '';
+            if (!isMe) {
+                const blockBtn = u.status === 'active'
+                    ? `<button class="btn-action btn-warn" onclick="toggleStatus(${u.id})">Bloquear</button>`
+                    : `<button class="btn-action btn-success" onclick="toggleStatus(${u.id})">Desbloquear</button>`;
+
+                const planBtn = u.plan_name
+                    ? `<button class="btn-action" onclick="openPlanModal(${u.id}, '${u.name}')">Trocar Plano</button><button class="btn-action btn-warn" onclick="removePlan(${u.id})">Remover</button>`
+                    : `<button class="btn-action btn-success" onclick="openPlanModal(${u.id}, '${u.name}')">Dar Plano</button>`;
+
+                actions = `
+                    ${blockBtn}
+                    ${planBtn}
+                    <button class="btn-action" onclick="openPasswordModal(${u.id}, '${u.name}')">Senha</button>
+                    <button class="btn-action btn-danger" onclick="openDeleteModal(${u.id}, '${u.name}')">Excluir</button>
+                `;
+            } else {
+                actions = '<span style="color:var(--text-muted); font-size:12px;">Voce</span>';
+            }
+
+            return `<tr class="${rowClass}">
+                <td>${u.id}</td>
+                <td><strong>${u.name}</strong></td>
+                <td>${u.email}</td>
+                <td>${roleHtml}</td>
+                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                <td>${plan}</td>
+                <td>${expires}</td>
+                <td>${created}</td>
+                <td><div class="actions-cell">${actions}</div></td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ── API CALLS ────────────────────────────────────────────────────────────
+
+    async function adminAction(action, data) {
+        try {
+            const res = await fetch(API_URL + '/admin.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ action, ...data })
+            });
+            const result = await res.json();
+            if (result.error) {
+                showToast(result.error, 'error');
+                return false;
+            }
+            showToast(result.message || 'Sucesso!', 'success');
+            return true;
+        } catch (err) {
+            showToast('Erro de conexao', 'error');
+            return false;
+        }
+    }
+
+    async function toggleStatus(userId) {
+        if (await adminAction('toggle_status', { user_id: userId })) {
+            loadAdmin();
+        }
+    }
+
+    async function removePlan(userId) {
+        if (await adminAction('remove_plan', { user_id: userId })) {
+            loadAdmin();
+        }
+    }
+
+    // ── MODALS ───────────────────────────────────────────────────────────────
+
+    let modalTargetId = null;
+
+    function openPlanModal(userId, userName) {
+        modalTargetId = userId;
+        document.getElementById('modal-plan-user').textContent = userName;
+        const select = document.getElementById('modal-plan-select');
+        select.innerHTML = allPlans.map(p =>
+            `<option value="${p.id}">${p.name} - R$ ${parseFloat(p.price).toFixed(2).replace('.', ',')} (${p.duration_days} dias)</option>`
+        ).join('');
+        document.getElementById('modal-plan').classList.add('show');
+    }
+
+    document.getElementById('modal-plan-confirm').addEventListener('click', async () => {
+        const planId = document.getElementById('modal-plan-select').value;
+        closeModal('modal-plan');
+        if (await adminAction('set_plan', { user_id: modalTargetId, plan_id: parseInt(planId) })) {
+            loadAdmin();
+        }
+    });
+
+    function openPasswordModal(userId, userName) {
+        modalTargetId = userId;
+        document.getElementById('modal-pw-user').textContent = userName;
+        document.getElementById('modal-pw-input').value = '';
+        document.getElementById('modal-password').classList.add('show');
+    }
+
+    document.getElementById('modal-pw-confirm').addEventListener('click', async () => {
+        const newPassword = document.getElementById('modal-pw-input').value;
+        if (newPassword.length < 6) {
+            showToast('Senha deve ter no minimo 6 caracteres', 'error');
+            return;
+        }
+        closeModal('modal-password');
+        if (await adminAction('reset_password', { user_id: modalTargetId, new_password: newPassword })) {
+            loadAdmin();
+        }
+    });
+
+    function openDeleteModal(userId, userName) {
+        modalTargetId = userId;
+        document.getElementById('modal-del-user').textContent = userName;
+        document.getElementById('modal-delete').classList.add('show');
+    }
+
+    document.getElementById('modal-del-confirm').addEventListener('click', async () => {
+        closeModal('modal-delete');
+        if (await adminAction('delete_user', { user_id: modalTargetId })) {
+            loadAdmin();
+        }
+    });
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('show');
+    }
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.classList.remove('show');
+        });
+    });
+
+    // ── TOAST ────────────────────────────────────────────────────────────────
+
+    function showToast(msg, type) {
+        const el = document.createElement('div');
+        el.className = 'toast toast-' + type;
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+    }
+
+    // ── LOAD DATA ────────────────────────────────────────────────────────────
 
     async function loadAdmin() {
         try {
@@ -95,35 +424,17 @@
                 return;
             }
 
-            // Stats
             const s = data.stats;
             document.getElementById('s-users').textContent = s.total_users;
             document.getElementById('s-subs').textContent = s.active_subs;
             document.getElementById('s-revenue').textContent = 'R$ ' + parseFloat(s.revenue).toFixed(2).replace('.', ',');
             document.getElementById('s-bets').textContent = s.today_bets;
 
-            // Users table
-            const tbody = document.getElementById('users-table');
-            if (data.users && data.users.length > 0) {
-                tbody.innerHTML = data.users.map(u => {
-                    const statusClass = u.status === 'active' ? 'badge-green' : 'badge-red';
-                    const statusText = u.status === 'active' ? 'Ativo' : 'Bloqueado';
-                    const plan = u.plan_name || 'Sem plano';
-                    const expires = u.expires_at ? new Date(u.expires_at).toLocaleDateString('pt-BR') : '-';
-                    const created = new Date(u.created_at).toLocaleDateString('pt-BR');
-                    return `<tr>
-                        <td>${u.id}</td>
-                        <td>${u.name}</td>
-                        <td>${u.email}</td>
-                        <td><span class="badge ${statusClass}">${statusText}</span></td>
-                        <td>${plan}</td>
-                        <td>${expires}</td>
-                        <td>${created}</td>
-                    </tr>`;
-                }).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">Nenhum usuario</td></tr>';
-            }
+            allUsers = data.users || [];
+            allPlans = data.plans || [];
+
+            updateFilterCounts();
+            renderUsers();
         } catch (err) {
             console.error('Erro ao carregar admin:', err);
         }
