@@ -1014,8 +1014,8 @@ connectWebSocket();
 // Polling de sinal ativo a cada 3s
 setInterval(refreshActiveSignal, 3000);
 
-// Polling de estado do jogo a cada 5s (fallback para animacao)
-setInterval(pollGameState, 5000);
+// Polling de estado do jogo a cada 2s (rapido para sincronia)
+setInterval(pollGameState, 2000);
 
 // Polling completo admin a cada 5s
 setInterval(refreshAdmin, 5000);

@@ -37,7 +37,7 @@ class BotBlaze {
             signalConfidenceMin: this.getSetting('confidence_min', 55)
         };
 
-        console.log(`[Config] Intervalo: ${this.getSetting('collect_interval', 3)}s | Confianca: ${config.signalConfidenceMin}% | Janela: ${config.analysisWindow}`);
+        console.log(`[Config] Intervalo: ${this.getSetting('collect_interval', 1)}s | Confianca: ${config.signalConfidenceMin}% | Janela: ${config.analysisWindow}`);
 
         this.collector = new DoubleCollector(this.db, config);
         this.analyzer = new DoubleAnalyzer(this.db, config);
@@ -210,7 +210,7 @@ class BotBlaze {
     }
 
     startCollector() {
-        const seconds = this.getSetting('collect_interval', 3);
+        const seconds = this.getSetting('collect_interval', 1);
         const intervalMs = seconds * 1000;
         this.collector.stop();
         console.log(`[Collector] Monitorando API a cada ${seconds}s...`);
