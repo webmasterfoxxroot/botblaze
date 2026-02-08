@@ -164,8 +164,12 @@ require_once __DIR__ . '/includes/header.php';
         <div class="roulette-history">
             <div class="roulette-history-label">GIROS ANTERIORES</div>
             <div class="roulette-history-dots" id="roulette-history-dots">
-                <?php foreach (array_slice($lastGames, 0, 25) as $g): ?>
-                    <span class="rh-dot <?= $colorClasses[$g['color']] ?>" title="<?= $g['roll'] ?>"><?= $g['roll'] ?></span>
+                <?php foreach (array_slice($lastGames, 0, 25) as $g):
+                    $r = (int)$g['roll'];
+                    $c = $r === 0 ? 'white' : ($r <= 7 ? 'red' : 'black');
+                    $label = $r === 0 ? '&#10070;' : $r;
+                ?>
+                    <span class="rh-dot <?= $c ?>" title="<?= $r ?>"><?= $label ?></span>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -616,19 +620,20 @@ require_once __DIR__ . '/includes/header.php';
     gap: 4px;
 }
 .rh-dot {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     cursor: default;
+    border: 2px solid transparent;
 }
-.rh-dot.red { background: #e63946; color: #fff; }
-.rh-dot.black { background: #1a1a2e; color: #fff; border: 1px solid #444; }
-.rh-dot.white { background: #e8e8e8; color: #333; }
+.rh-dot.red { background: #e63946; color: #fff; border-color: #c0313d; }
+.rh-dot.black { background: #1a1a2e; color: #ccc; border-color: #3a3a4e; }
+.rh-dot.white { background: #f0f0f0; color: #333; border-color: #ddd; font-size: 16px; }
 
 @media (max-width: 768px) {
     .strategies-grid { grid-template-columns: 1fr; }
@@ -658,14 +663,22 @@ let lastGameId = null;
 let countdownTimer = null;
 let countdownSec = 0;
 
+// Deriva cor do roll (defesa: nao depende do campo color)
+function colorFromRoll(roll) {
+    roll = parseInt(roll);
+    if (roll === 0) return 0;
+    if (roll <= 7) return 1;
+    return 2;
+}
+
 function getCardClass(color) {
     return { 0: 'rc-white', 1: 'rc-red', 2: 'rc-black' }[parseInt(color)] || 'rc-black';
 }
 
 function createCardHTML(game) {
-    const color = parseInt(game.color);
+    const roll = parseInt(game.roll);
+    const color = colorFromRoll(roll);
     const cls = getCardClass(color);
-    const roll = game.roll;
     if (color === 0) {
         return `<div class="roulette-card ${cls}"><div class="roulette-card-inner"><span class="rc-icon">&#10070;</span></div></div>`;
     }
@@ -827,6 +840,14 @@ function stopCountdown() {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 }
 
+// Deriva cor do roll (defesa: nao depende do campo color)
+function colorFromRoll(roll) {
+    roll = parseInt(roll);
+    if (roll === 0) return 0;
+    if (roll <= 7) return 1;
+    return 2;
+}
+
 // Atualiza GIROS ANTERIORES inteiro com dados da API (mais recente primeiro)
 function updateRouletteHistoryFull(games) {
     const dots = document.getElementById('roulette-history-dots');
@@ -834,9 +855,10 @@ function updateRouletteHistoryFull(games) {
 
     let html = '';
     games.forEach(g => {
-        const color = parseInt(g.color);
-        const cls = colorClasses[color] || 'white';
-        html += `<span class="rh-dot ${cls}" title="${g.roll}">${g.roll}</span>`;
+        const roll = parseInt(g.roll);
+        const cls = colorClasses[colorFromRoll(roll)] || 'white';
+        const label = roll === 0 ? '&#10070;' : roll;
+        html += `<span class="rh-dot ${cls}" title="${roll}">${label}</span>`;
     });
     dots.innerHTML = html;
 }
@@ -846,12 +868,12 @@ function addToRouletteHistory(newGame) {
     const dots = document.getElementById('roulette-history-dots');
     if (!dots) return;
 
-    const color = parseInt(newGame.color);
-    const cls = colorClasses[color] || 'white';
+    const roll = parseInt(newGame.roll);
+    const cls = colorClasses[colorFromRoll(roll)] || 'white';
     const dot = document.createElement('span');
     dot.className = `rh-dot ${cls}`;
-    dot.title = newGame.roll;
-    dot.textContent = newGame.roll;
+    dot.title = roll;
+    dot.innerHTML = roll === 0 ? '&#10070;' : roll;
     dots.insertBefore(dot, dots.firstChild);
     while (dots.children.length > 25) dots.removeChild(dots.lastChild);
 }
