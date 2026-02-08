@@ -3,3 +3,6 @@ node_modules/
 *.log
 .DS_Store
 extension/*.pem
+database/*.db
+database/*.db-wal
+database/*.db-shm
