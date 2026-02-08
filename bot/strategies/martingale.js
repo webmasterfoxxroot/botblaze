@@ -1,106 +1,94 @@
 /**
- * Estrategia Martingale
- * Analisa sequencias de perda e sugere quando entrar/dobrar
+ * Estrategia: Analise Estatistica de Recuperacao
+ * Analisa: apos N rodadas sem uma cor, qual a chance real dela voltar?
+ * Usa dados historicos reais pra calcular probabilidade de recuperacao.
  */
 
 class MartingaleStrategy {
     constructor() {
         this.name = 'martingale';
-        this.maxLosses = 5; // maximo de perdas seguidas antes de parar
     }
 
-    analyze(games) {
-        if (games.length < 10) return null;
+    analyze(games, allHistory) {
+        if (games.length < 20) return null;
 
         const colors = games.map(g => g.color);
-        const result = {
-            strategy: this.name,
-            predictions: [],
-            analysis: {}
-        };
+        const histColors = (allHistory || games).map(g => g.color);
 
-        // Analisa para Vermelho
-        const redAnalysis = this.analyzeColor(colors, 1);
-        result.analysis.red = redAnalysis;
+        const predictions = [];
 
-        // Analisa para Preto
-        const blackAnalysis = this.analyzeColor(colors, 2);
-        result.analysis.black = blackAnalysis;
+        // Analisa cada cor
+        for (const targetColor of [1, 2]) {
+            // Quantas rodadas desde a ultima aparicao
+            let roundsSince = 0;
+            for (let i = 0; i < colors.length; i++) {
+                if (colors[i] === targetColor) break;
+                roundsSince++;
+            }
 
-        // Gera predicoes baseadas em Martingale
-        // Se uma cor nao aparece ha muitas rodadas, pode ser bom entrar
-        if (redAnalysis.roundsSinceLast >= 3) {
-            const confidence = Math.min(50 + (redAnalysis.roundsSinceLast * 6), 75);
-            result.predictions.push({
-                color: 1,
-                confidence,
-                reason: `Martingale: Vermelho ausente ha ${redAnalysis.roundsSinceLast} rodadas`,
-                martingaleLevel: redAnalysis.roundsSinceLast,
-                suggestedMultiplier: Math.pow(2, redAnalysis.roundsSinceLast - 1)
-            });
-        }
+            if (roundsSince < 3) continue; // Menos de 3 ausencias = normal
 
-        if (blackAnalysis.roundsSinceLast >= 3) {
-            const confidence = Math.min(50 + (blackAnalysis.roundsSinceLast * 6), 75);
-            result.predictions.push({
-                color: 2,
-                confidence,
-                reason: `Martingale: Preto ausente ha ${blackAnalysis.roundsSinceLast} rodadas`,
-                martingaleLevel: blackAnalysis.roundsSinceLast,
-                suggestedMultiplier: Math.pow(2, blackAnalysis.roundsSinceLast - 1)
-            });
-        }
+            // Verifica no historico: apos N ausencias, qual % a cor aparece?
+            const recoveryRate = this.getRecoveryRate(histColors, targetColor, roundsSince);
 
-        // Alerta de risco alto
-        for (const pred of result.predictions) {
-            if (pred.martingaleLevel >= this.maxLosses) {
-                pred.warning = 'RISCO ALTO: Muitas rodadas sem aparecer. Cuidado com Martingale profundo!';
-                pred.confidence = Math.max(pred.confidence - 15, 40);
+            if (recoveryRate.pct > 52 && recoveryRate.samples >= 5) {
+                const conf = Math.min(Math.round(recoveryRate.pct), 82);
+                predictions.push({
+                    color: targetColor,
+                    confidence: conf,
+                    reason: `${this.colorName(targetColor)} ausente ${roundsSince}x. Historico: volta ${recoveryRate.pct.toFixed(0)}% apos ${roundsSince}+ ausencias (${recoveryRate.samples} amostras)`
+                });
             }
         }
 
-        return result;
-    }
-
-    analyzeColor(colors, targetColor) {
-        let roundsSinceLast = 0;
-        for (let i = 0; i < colors.length; i++) {
-            if (colors[i] === targetColor) break;
-            roundsSinceLast++;
-        }
-
-        // Maior sequencia sem a cor nas ultimas 50
-        let maxAbsence = 0;
-        let currentAbsence = 0;
-        for (const c of colors) {
-            if (c !== targetColor) {
-                currentAbsence++;
-                maxAbsence = Math.max(maxAbsence, currentAbsence);
-            } else {
-                currentAbsence = 0;
-            }
-        }
-
-        // Contagem de vezes que a cor apareceu apos X ausencias
-        const recoveryAfter = {};
-        let absence = 0;
-        for (let i = colors.length - 1; i >= 0; i--) {
-            if (colors[i] !== targetColor) {
-                absence++;
-            } else {
-                if (absence > 0) {
-                    recoveryAfter[absence] = (recoveryAfter[absence] || 0) + 1;
-                }
-                absence = 0;
+        // Branco: analise separada (muito mais raro)
+        const whiteAbsence = colors.indexOf(0);
+        if (whiteAbsence === -1 || whiteAbsence > 30) {
+            const roundsSinceWhite = whiteAbsence === -1 ? colors.length : whiteAbsence;
+            const whiteRecovery = this.getRecoveryRate(histColors, 0, roundsSinceWhite);
+            if (whiteRecovery.pct > 15 && roundsSinceWhite > 30) {
+                predictions.push({
+                    color: 0,
+                    confidence: Math.min(Math.round(whiteRecovery.pct * 3), 65),
+                    reason: `Branco ausente ${roundsSinceWhite}x. Probabilidade aumentando.`
+                });
             }
         }
 
         return {
-            roundsSinceLast,
-            maxAbsence,
-            recoveryAfter,
-            totalAppearances: colors.filter(c => c === targetColor).length
+            strategy: this.name,
+            predictions
         };
+    }
+
+    // Calcula: no historico, apos a cor ficar ausente por >= N rodadas,
+    // qual % ela aparece na rodada seguinte?
+    getRecoveryRate(histColors, targetColor, minAbsence) {
+        const chrono = [...histColors].reverse(); // Ordem cronologica
+        let appearances = 0, opportunities = 0;
+        let currentAbsence = 0;
+
+        for (let i = 0; i < chrono.length; i++) {
+            if (chrono[i] === targetColor) {
+                currentAbsence = 0;
+            } else {
+                currentAbsence++;
+                // Quando atinge o minimo de ausencia, vemos se a proxima e a cor alvo
+                if (currentAbsence >= minAbsence && i + 1 < chrono.length) {
+                    opportunities++;
+                    if (chrono[i + 1] === targetColor) appearances++;
+                }
+            }
+        }
+
+        return {
+            pct: opportunities > 0 ? (appearances / opportunities) * 100 : 0,
+            samples: opportunities
+        };
+    }
+
+    colorName(c) {
+        return { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' }[c] || '?';
     }
 }
 

@@ -17,92 +17,44 @@ class DoubleAnalyzer {
     }
 
     async analyze() {
-        // Busca ultimas 50 rodadas para analise
+        // Ultimas 50 rodadas para analise
         const [recent50] = await this.db.execute(
             'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 50'
         );
 
-        if (recent50.length < 10) {
-            console.log(`[Analyzer] Dados insuficientes: ${recent50.length}/10 minimo`);
+        if (recent50.length < 20) {
             return null;
         }
 
-        // Busca historico completo para ML
+        // Historico completo pra ML e estatisticas (ate 10000)
         const [allHistory] = await this.db.execute(
-            'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 5000'
+            'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 10000'
         );
 
         const allPredictions = [];
-        const strategyResults = {};
 
-        // Roda todas as estrategias
+        // TODAS as estrategias recebem o historico completo
         for (const strategy of this.strategies) {
             try {
-                let result;
-                if (strategy.name === 'ml-patterns') {
-                    result = strategy.analyze(recent50, allHistory);
-                } else {
-                    result = strategy.analyze(recent50);
-                }
+                const result = strategy.analyze(recent50, allHistory);
 
-                if (result && result.predictions.length > 0) {
-                    strategyResults[strategy.name] = result;
+                if (result && result.predictions && result.predictions.length > 0) {
                     allPredictions.push(...result.predictions.map(p => ({
                         ...p,
                         strategy: strategy.name
                     })));
                 }
             } catch (err) {
-                console.error(`[Analyzer] Erro na estrategia ${strategy.name}:`, err.message);
+                console.error(`[Analyzer] Erro ${strategy.name}:`, err.message);
             }
         }
-
-        // Combina predicoes: agrupa por cor e calcula confianca combinada
-        const combined = this.combinePredictions(allPredictions);
 
         return {
             timestamp: new Date(),
             totalGames: recent50.length,
             lastGame: recent50[0],
-            strategyResults,
-            allPredictions,
-            combined,
-            bestSignal: combined.length > 0 ? combined[0] : null
+            allPredictions
         };
-    }
-
-    combinePredictions(predictions) {
-        const byColor = { 0: [], 1: [], 2: [] };
-
-        predictions.forEach(p => {
-            byColor[p.color].push(p);
-        });
-
-        const combined = [];
-        for (const [color, preds] of Object.entries(byColor)) {
-            if (preds.length === 0) continue;
-
-            // Confianca combinada: media ponderada + bonus por multiplas estrategias concordando
-            const avgConfidence = preds.reduce((sum, p) => sum + p.confidence, 0) / preds.length;
-            const strategyBonus = Math.min((preds.length - 1) * 5, 15);
-            const finalConfidence = Math.min(avgConfidence + strategyBonus, 95);
-
-            const strategies = [...new Set(preds.map(p => p.strategy))];
-            const reasons = preds.map(p => p.reason);
-
-            combined.push({
-                color: parseInt(color),
-                confidence: Math.round(finalConfidence),
-                strategiesCount: strategies.length,
-                strategies,
-                reasons,
-                predictions: preds
-            });
-        }
-
-        // Ordena por confianca (maior primeiro)
-        combined.sort((a, b) => b.confidence - a.confidence);
-        return combined;
     }
 }
 

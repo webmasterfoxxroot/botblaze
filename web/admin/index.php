@@ -4,6 +4,33 @@ requireAdmin();
 
 $db = getDB();
 
+// Acao de reset
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = $_POST['action'];
+
+    if ($action === 'reset_signals') {
+        $db->exec("DELETE FROM signals");
+        $resetMsg = "Todos os sinais e estatisticas foram resetados!";
+    } elseif ($action === 'reset_history') {
+        $db->exec("DELETE FROM signals");
+        $db->exec("DELETE FROM game_history_double");
+        $resetMsg = "Sinais e historico de jogos foram resetados!";
+    } elseif ($action === 'reset_all') {
+        $db->exec("DELETE FROM user_bets");
+        $db->exec("DELETE FROM transactions");
+        $db->exec("DELETE FROM signals");
+        $db->exec("DELETE FROM game_history_double");
+        $resetMsg = "Tudo foi resetado (sinais, historico, apostas, transacoes)!";
+    }
+
+    if (isset($resetMsg)) {
+        header('Location: /admin/?reset=ok&msg=' . urlencode($resetMsg));
+        exit;
+    }
+}
+
+$resetMsg = isset($_GET['reset']) ? $_GET['msg'] : null;
+
 // Stats gerais
 $totalUsers = $db->query("SELECT COUNT(*) as c FROM users WHERE role = 'user'")->fetch()['c'];
 $activeUsers = $db->query("SELECT COUNT(*) as c FROM users WHERE role = 'user' AND status = 'active'")->fetch()['c'];
@@ -86,7 +113,13 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="admin-dashboard">
-    <h1 class="page-title">Painel Admin <span class="badge badge-live" id="live-indicator">TEMPO REAL</span></h1>
+    <h1 class="page-title">Painel Admin <span class="badge badge-live" id="live-indicator">TEMPO REAL</span>
+        <button class="btn btn-sm btn-outline" onclick="document.getElementById('reset-modal').style.display='flex'" style="margin-left:16px;font-size:12px;">Resetar Dados</button>
+    </h1>
+
+    <?php if ($resetMsg): ?>
+    <div class="alert alert-success"><?= htmlspecialchars($resetMsg) ?></div>
+    <?php endif; ?>
 
     <!-- Stats Gerais -->
     <div class="stats-grid stats-grid-6">
@@ -196,6 +229,39 @@ require_once __DIR__ . '/../includes/header.php';
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+    </div>
+    <!-- Modal Reset -->
+    <div id="reset-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:480px;width:90%;">
+            <h2 style="margin-bottom:8px;">Resetar Dados</h2>
+            <p class="text-muted" style="margin-bottom:24px;font-size:14px;">Escolha o que deseja limpar. Esta acao nao pode ser desfeita.</p>
+
+            <form method="POST" style="margin-bottom:12px;">
+                <input type="hidden" name="action" value="reset_signals">
+                <button type="submit" class="btn btn-primary btn-full" onclick="return confirm('Tem certeza? Vai apagar todos os sinais e estatisticas!')">
+                    Resetar Sinais e Estatisticas
+                </button>
+                <p class="text-muted" style="font-size:11px;margin-top:4px;">Apaga todos os sinais (WIN/LOSS). Mantem historico de jogos.</p>
+            </form>
+
+            <form method="POST" style="margin-bottom:12px;">
+                <input type="hidden" name="action" value="reset_history">
+                <button type="submit" class="btn btn-danger btn-full" onclick="return confirm('Tem certeza? Vai apagar sinais E historico de jogos!')">
+                    Resetar Sinais + Historico de Jogos
+                </button>
+                <p class="text-muted" style="font-size:11px;margin-top:4px;">Apaga sinais e historico. Bot vai recoletar do zero.</p>
+            </form>
+
+            <form method="POST" style="margin-bottom:16px;">
+                <input type="hidden" name="action" value="reset_all">
+                <button type="submit" class="btn btn-full" style="background:#8b0000;color:#fff;" onclick="return confirm('ATENCAO! Vai apagar TUDO: sinais, historico, apostas e transacoes. Tem certeza?')">
+                    Resetar TUDO
+                </button>
+                <p class="text-muted" style="font-size:11px;margin-top:4px;">Apaga tudo exceto usuarios e planos.</p>
+            </form>
+
+            <button class="btn btn-outline btn-full" onclick="document.getElementById('reset-modal').style.display='none'">Cancelar</button>
         </div>
     </div>
 </div>
