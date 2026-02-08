@@ -1,7 +1,7 @@
 class DoubleSignals {
     constructor(db, config) {
         this.db = db;
-        this.minConfidence = config.signalConfidenceMin || 65;
+        this.minConfidence = config.signalConfidenceMin || 55;
     }
 
     async generateSignals(analysisResult) {
