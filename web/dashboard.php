@@ -797,23 +797,29 @@ let blazeCycleTime = 30;
 let lastSyncGameId = null;
 
 // HANDLER PRINCIPAL: recebe blaze_sync do bot
+// Estados: waiting -> spinning_wait -> spinning -> result -> waiting
 function handleBlazeSync(data) {
     if (!data || !data.games || data.games.length === 0) return;
     if (data.cycleTime) blazeCycleTime = data.cycleTime;
     const newestId = data.games[0].id || data.games[0].game_id;
 
-    // SEMPRE atualiza GIROS ANTERIORES com dados DIRETO da API (espelho perfeito)
+    // SEMPRE atualiza GIROS ANTERIORES com dados DIRETO da API
     updateRouletteHistoryFull(data.games);
 
-    if (data.newGame && newestId !== lastSyncGameId && rouletteState !== 'spinning') {
+    // JOGO NOVO DETECTADO
+    if (data.newGame && newestId !== lastSyncGameId) {
         lastSyncGameId = newestId;
-        spinRoulette(data.newGame);
+        if (rouletteState !== 'spinning' && rouletteState !== 'result') {
+            spinRoulette(data.newGame);
+        }
         return;
     }
+    // Primeira carga
     if (lastSyncGameId === null) {
         lastSyncGameId = newestId;
         initRoulette(data.games);
     }
+    // Atualiza countdown (so no estado waiting)
     if (rouletteState === 'waiting' && data.secondsToNext != null) {
         updateCountdown(data.secondsToNext);
     }
@@ -843,7 +849,15 @@ function setRouletteStatus(state, text) {
 
 function updateCountdown(secondsToNext) {
     stopCountdown();
-    if (secondsToNext <= 0 || rouletteState !== 'waiting') return;
+    if (rouletteState !== 'waiting') return;
+
+    // Se countdown <= 0, mostra "Girando..." (proximo giro deve estar acontecendo)
+    if (secondsToNext <= 0) {
+        setRouletteStatus('spinning');
+        rouletteState = 'spinning_wait';
+        return;
+    }
+
     let remaining = secondsToNext;
     const total = blazeCycleTime;
     const statusText = document.getElementById('roulette-status-text');
@@ -852,7 +866,14 @@ function updateCountdown(secondsToNext) {
     if (progress) progress.style.width = ((total - remaining) / total * 100) + '%';
     countdownTimer = setInterval(() => {
         remaining--;
-        if (remaining <= 0) { stopCountdown(); return; }
+        if (remaining <= 0) {
+            stopCountdown();
+            if (rouletteState === 'waiting') {
+                setRouletteStatus('spinning');
+                rouletteState = 'spinning_wait';
+            }
+            return;
+        }
         if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${remaining.toString().padStart(2,'0')}`;
         if (progress && rouletteState === 'waiting') progress.style.width = ((total - remaining) / total * 100) + '%';
     }, 1000);
