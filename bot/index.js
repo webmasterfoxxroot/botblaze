@@ -107,7 +107,6 @@ class BotBlaze {
             this.collector.startStream(blazeWsUrl);
         } else {
             console.log('[Bot] WS da Blaze nao configurado. Configure em Admin > Config > URL WebSocket Blaze');
-            console.log('[Bot] URLs comuns: https://api-v2.blaze.com, https://api-v2.blaze1.space');
         }
 
         // Inicia HTTP polling (sempre ativo como fallback)

@@ -48,9 +48,9 @@ require_once __DIR__ . '/../includes/header.php';
                             <span>URL WebSocket Blaze (tempo real)</span>
                         </div>
                         <input type="text" class="setting-input" id="blaze_ws_url"
-                            placeholder="https://api-v2.blaze.com"
+                            placeholder="URL do WebSocket da Blaze"
                             value="">
-                        <p class="setting-hint">URL do WebSocket da Blaze para receber jogos em tempo real (Socket.IO). URLs comuns: <code>https://api-v2.blaze.com</code> ou <code>https://api-v2.blaze1.space</code></p>
+                        <p class="setting-hint">URL do WebSocket da Blaze para receber jogos em tempo real (Socket.IO). Coloque a URL correta do WebSocket da Blaze.</p>
                     </div>
 
                     <div class="blaze-conn-status" id="blaze-conn-info">
