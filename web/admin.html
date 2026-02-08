@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - BotBlaze</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">BotBlaze</a>
+        <ul class="navbar-nav">
+            <li><a href="admin.html">Admin</a></li>
+            <li><a href="#" id="logout-btn">Sair</a></li>
+        </ul>
+    </nav>
+
+    <div class="container dashboard">
+        <h1>Painel Admin</h1>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="s-users">0</div>
+                <div class="stat-label">Usuarios</div>
+            </div>
+            <div class="stat-card stat-green">
+                <div class="stat-value" id="s-subs">0</div>
+                <div class="stat-label">Assinantes Ativos</div>
+            </div>
+            <div class="stat-card stat-gold">
+                <div class="stat-value" id="s-revenue">R$ 0</div>
+                <div class="stat-label">Receita Total</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="s-bets">0</div>
+                <div class="stat-label">Apostas Hoje</div>
+            </div>
+        </div>
+
+        <!-- Users -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Usuarios</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Plano</th>
+                            <th>Expira</th>
+                            <th>Cadastro</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table">
+                        <tr><td colspan="7" style="text-align:center; color: var(--text-muted);">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>BotBlaze Admin &copy; 2026</p>
+    </footer>
+
+    <script>
+    const API_URL = window.location.origin + '/api';
+    const token = localStorage.getItem('botblaze_token');
+    const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
+
+    if (!token || user.role !== 'admin') {
+        window.location.href = '/web/login.html';
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        localStorage.removeItem('botblaze_token');
+        localStorage.removeItem('botblaze_user');
+        window.location.href = '/web/login.html';
+    });
+
+    // Admin uses a dedicated endpoint (or we can extend auth.php)
+    // For now, fetch basic stats from existing endpoints
+    async function loadAdmin() {
+        // We'll add a proper admin API later
+        // For now just show a placeholder
+        try {
+            const res = await fetch(API_URL + '/auth.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ action: 'validate' })
+            });
+            const data = await res.json();
+            if (!data.user || data.user.role !== 'admin') {
+                window.location.href = '/web/login.html';
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    loadAdmin();
+    </script>
+</body>
+</html>

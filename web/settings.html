@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuracoes - BotBlaze</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">BotBlaze</a>
+        <ul class="navbar-nav">
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="settings.html">Configuracoes</a></li>
+            <li><a href="#" id="logout-btn">Sair</a></li>
+        </ul>
+    </nav>
+
+    <div class="container dashboard">
+        <div class="page-header">
+            <h1>Configuracoes do Bot</h1>
+            <span class="badge badge-green" id="save-status" style="display:none;">Salvo!</span>
+        </div>
+
+        <div id="error-msg" class="alert alert-error" style="display:none;"></div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <!-- Aposta -->
+            <div class="card">
+                <div class="card-header"><h2>Aposta</h2></div>
+                <div class="form-group">
+                    <label class="form-label">Valor da Aposta (R$)</label>
+                    <input type="number" id="bet_amount" class="form-input" min="0.10" max="1000" step="0.10" value="2.00">
+                    <p class="form-hint">Valor base de cada aposta</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estrategia</label>
+                    <select id="strategy" class="form-input">
+                        <option value="color_frequency">Frequencia de Cor</option>
+                        <option value="martingale">Martingale Puro</option>
+                        <option value="pattern">Padrao de Sequencia</option>
+                        <option value="manual">Manual (so via extensao)</option>
+                    </select>
+                    <p class="form-hint">Metodo de analise para escolher a cor</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Apostas por Dia</label>
+                    <input type="number" id="max_bets_per_day" class="form-input" min="1" max="500" value="50">
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 12px;">
+                    <label class="form-label" style="margin-bottom: 0;">Bot Automatico</label>
+                    <input type="checkbox" id="auto_bet" checked style="width: 20px; height: 20px;">
+                    <p class="form-hint" style="margin-top: 0;">Apostar automaticamente quando detectar oportunidade</p>
+                </div>
+            </div>
+
+            <!-- Martingale -->
+            <div class="card">
+                <div class="card-header"><h2>Martingale</h2></div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 12px;">
+                    <label class="form-label" style="margin-bottom: 0;">Ativar Martingale</label>
+                    <input type="checkbox" id="martingale_enabled" style="width: 20px; height: 20px;">
+                </div>
+                <p class="form-hint" style="margin-bottom: 16px;">Dobra a aposta apos cada perda para recuperar</p>
+                <div class="form-group">
+                    <label class="form-label">Niveis Maximo</label>
+                    <input type="number" id="martingale_max" class="form-input" min="1" max="10" value="3">
+                    <p class="form-hint">Quantas vezes dobrar antes de parar (ex: 3 = aposta ate 3x)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Multiplicador</label>
+                    <input type="number" id="martingale_multiplier" class="form-input" min="1.5" max="5.0" step="0.1" value="2.0">
+                    <p class="form-hint">Fator de multiplicacao apos perda (padrao: 2x)</p>
+                </div>
+            </div>
+
+            <!-- Limites -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-header"><h2>Limites de Seguranca</h2></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    <div class="form-group">
+                        <label class="form-label">Stop Loss (R$)</label>
+                        <input type="number" id="stop_loss" class="form-input" min="1" max="10000" step="1" value="50">
+                        <p class="form-hint">Bot para de apostar ao perder este valor no dia</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Stop Gain (R$)</label>
+                        <input type="number" id="stop_gain" class="form-input" min="1" max="10000" step="1" value="100">
+                        <p class="form-hint">Bot para de apostar ao lucrar este valor no dia</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <button class="btn btn-primary btn-lg" id="save-btn" onclick="saveSettings()">Salvar Configuracoes</button>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>BotBlaze &copy; 2026</p>
+    </footer>
+
+    <script>
+    const API_URL = window.location.origin + '/api';
+    const token = localStorage.getItem('botblaze_token');
+    if (!token) window.location.href = '/web/login.html';
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        localStorage.removeItem('botblaze_token');
+        localStorage.removeItem('botblaze_user');
+        window.location.href = '/web/login.html';
+    });
+
+    const fields = ['bet_amount', 'strategy', 'martingale_enabled', 'martingale_max', 'martingale_multiplier', 'stop_loss', 'stop_gain', 'max_bets_per_day', 'auto_bet'];
+
+    async function loadSettings() {
+        try {
+            const res = await fetch(API_URL + '/settings.php', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            if (data.settings) {
+                const s = data.settings;
+                document.getElementById('bet_amount').value = s.bet_amount || 2;
+                document.getElementById('strategy').value = s.strategy || 'color_frequency';
+                document.getElementById('martingale_enabled').checked = s.martingale_enabled == 1;
+                document.getElementById('martingale_max').value = s.martingale_max || 3;
+                document.getElementById('martingale_multiplier').value = s.martingale_multiplier || 2.0;
+                document.getElementById('stop_loss').value = s.stop_loss || 50;
+                document.getElementById('stop_gain').value = s.stop_gain || 100;
+                document.getElementById('max_bets_per_day').value = s.max_bets_per_day || 50;
+                document.getElementById('auto_bet').checked = s.auto_bet == 1;
+            }
+        } catch (err) {
+            console.error('Erro:', err);
+        }
+    }
+
+    async function saveSettings() {
+        const btn = document.getElementById('save-btn');
+        const errorMsg = document.getElementById('error-msg');
+        const saveStatus = document.getElementById('save-status');
+        errorMsg.style.display = 'none';
+        saveStatus.style.display = 'none';
+        btn.textContent = 'Salvando...';
+        btn.disabled = true;
+
+        const settings = {
+            bet_amount: parseFloat(document.getElementById('bet_amount').value),
+            strategy: document.getElementById('strategy').value,
+            martingale_enabled: document.getElementById('martingale_enabled').checked ? 1 : 0,
+            martingale_max: parseInt(document.getElementById('martingale_max').value),
+            martingale_multiplier: parseFloat(document.getElementById('martingale_multiplier').value),
+            stop_loss: parseFloat(document.getElementById('stop_loss').value),
+            stop_gain: parseFloat(document.getElementById('stop_gain').value),
+            max_bets_per_day: parseInt(document.getElementById('max_bets_per_day').value),
+            auto_bet: document.getElementById('auto_bet').checked ? 1 : 0
+        };
+
+        try {
+            const res = await fetch(API_URL + '/settings.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify(settings)
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                errorMsg.textContent = data.error;
+                errorMsg.style.display = 'block';
+            } else {
+                saveStatus.style.display = 'inline-flex';
+                setTimeout(() => saveStatus.style.display = 'none', 3000);
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Erro de conexao.';
+            errorMsg.style.display = 'block';
+        }
+
+        btn.textContent = 'Salvar Configuracoes';
+        btn.disabled = false;
+    }
+
+    loadSettings();
+    </script>
+</body>
+</html>

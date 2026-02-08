@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - BotBlaze</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">BotBlaze</a>
+        <ul class="navbar-nav">
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="settings.html">Configuracoes</a></li>
+            <li><a href="#" id="logout-btn">Sair</a></li>
+        </ul>
+    </nav>
+
+    <div class="container dashboard">
+        <div class="page-header">
+            <h1>Dashboard</h1>
+            <div>
+                <span class="badge badge-green" id="sub-status">Carregando...</span>
+                <span id="user-name" style="margin-left: 12px; color: var(--text-muted); font-size: 14px;"></span>
+            </div>
+        </div>
+
+        <!-- Subscription Alert -->
+        <div id="no-sub-alert" class="alert alert-warning" style="display:none;">
+            Voce nao tem uma assinatura ativa. <a href="plans.html">Escolha um plano</a> para usar a extensao.
+        </div>
+
+        <!-- Extension Download -->
+        <div id="extension-card" class="card" style="display:none;">
+            <div class="card-header">
+                <h2>Extensao Chrome</h2>
+                <span class="badge badge-blue">v1.0.0</span>
+            </div>
+            <p style="color: var(--text-muted); margin-bottom: 16px;">
+                Baixe a extensao e instale no Chrome para comecar a usar o bot.
+            </p>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <div class="card" style="flex: 1; min-width: 200px; text-align: center; padding: 16px;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">1</div>
+                    <p style="font-size: 13px; color: var(--text-muted);">Baixe a pasta <strong>extension/</strong> do projeto</p>
+                </div>
+                <div class="card" style="flex: 1; min-width: 200px; text-align: center; padding: 16px;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">2</div>
+                    <p style="font-size: 13px; color: var(--text-muted);">Abra <strong>chrome://extensions</strong></p>
+                </div>
+                <div class="card" style="flex: 1; min-width: 200px; text-align: center; padding: 16px;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">3</div>
+                    <p style="font-size: 13px; color: var(--text-muted);">Ative <strong>Modo Desenvolvedor</strong> e carregue a pasta</p>
+                </div>
+            </div>
+            <p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+                Seu token de API: <code id="api-token" style="background: var(--bg-input); padding: 4px 8px; border-radius: 4px; font-size: 12px;">---</code>
+                <button class="btn btn-sm btn-outline" onclick="copyToken()" style="margin-left: 8px;">Copiar</button>
+            </p>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total-bets">0</div>
+                <div class="stat-label">Apostas Hoje</div>
+            </div>
+            <div class="stat-card stat-green">
+                <div class="stat-value" id="stat-wins">0</div>
+                <div class="stat-label">Vitorias</div>
+            </div>
+            <div class="stat-card stat-red">
+                <div class="stat-value" id="stat-losses">0</div>
+                <div class="stat-label">Derrotas</div>
+            </div>
+            <div class="stat-card stat-gold">
+                <div class="stat-value" id="stat-profit">R$ 0,00</div>
+                <div class="stat-label">Lucro Hoje</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-winrate">0%</div>
+                <div class="stat-label">Win Rate</div>
+            </div>
+        </div>
+
+        <!-- Bet History -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Historico de Apostas</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Cor</th>
+                            <th>Valor</th>
+                            <th>Resultado</th>
+                            <th>Lucro</th>
+                            <th>Martingale</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table">
+                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma aposta registrada</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>BotBlaze &copy; 2026</p>
+    </footer>
+
+    <script>
+    const API_URL = window.location.origin + '/api';
+    const token = localStorage.getItem('botblaze_token');
+    const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
+
+    if (!token) window.location.href = '/web/login.html';
+
+    document.getElementById('user-name').textContent = user.name || '';
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        localStorage.removeItem('botblaze_token');
+        localStorage.removeItem('botblaze_user');
+        window.location.href = '/web/login.html';
+    });
+
+    function copyToken() {
+        const tokenEl = document.getElementById('api-token');
+        navigator.clipboard.writeText(tokenEl.textContent).then(() => {
+            alert('Token copiado!');
+        });
+    }
+
+    const colorNames = { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' };
+    const colorClasses = { 0: 'white', 1: 'red', 2: 'black' };
+
+    async function loadDashboard() {
+        try {
+            // Check subscription
+            const subRes = await fetch(API_URL + '/subscription.php', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const subData = await subRes.json();
+
+            const subStatus = document.getElementById('sub-status');
+            const noSubAlert = document.getElementById('no-sub-alert');
+            const extCard = document.getElementById('extension-card');
+
+            if (subData.subscription) {
+                subStatus.textContent = subData.subscription.plan_name + ' - ' + subData.days_remaining + ' dias';
+                subStatus.className = 'badge badge-green';
+                noSubAlert.style.display = 'none';
+                extCard.style.display = 'block';
+            } else {
+                subStatus.textContent = 'Sem assinatura';
+                subStatus.className = 'badge badge-red';
+                noSubAlert.style.display = 'block';
+                extCard.style.display = 'none';
+            }
+
+            if (subData.api_token) {
+                document.getElementById('api-token').textContent = subData.api_token;
+            }
+
+            // Load history
+            const histRes = await fetch(API_URL + '/history.php', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const histData = await histRes.json();
+
+            if (histData.stats) {
+                const s = histData.stats;
+                document.getElementById('stat-total-bets').textContent = s.total || 0;
+                document.getElementById('stat-wins').textContent = s.wins || 0;
+                document.getElementById('stat-losses').textContent = s.losses || 0;
+                document.getElementById('stat-profit').textContent = 'R$ ' + (parseFloat(s.profit) || 0).toFixed(2).replace('.', ',');
+                const decided = (s.wins || 0) + (s.losses || 0);
+                document.getElementById('stat-winrate').textContent = decided > 0 ? ((s.wins / decided) * 100).toFixed(1) + '%' : '0%';
+            }
+
+            if (histData.bets && histData.bets.length > 0) {
+                const tbody = document.getElementById('history-table');
+                tbody.innerHTML = histData.bets.map(b => {
+                    const color = parseInt(b.color_bet);
+                    const time = new Date(b.created_at).toLocaleTimeString('pt-BR');
+                    const resultClass = b.result === 'win' ? 'badge-green' : (b.result === 'loss' ? 'badge-red' : 'badge-gold');
+                    const resultText = b.result === 'win' ? 'WIN' : (b.result === 'loss' ? 'LOSS' : '...');
+                    const profit = parseFloat(b.profit) || 0;
+                    const profitColor = profit >= 0 ? 'var(--green)' : 'var(--red)';
+                    return `<tr>
+                        <td>${time}</td>
+                        <td><span class="color-dot ${colorClasses[color]}"></span> ${colorNames[color] || '?'}</td>
+                        <td>R$ ${parseFloat(b.amount).toFixed(2)}</td>
+                        <td><span class="badge ${resultClass}">${resultText}</span></td>
+                        <td style="color: ${profitColor}; font-weight: 600;">${profit >= 0 ? '+' : ''}R$ ${profit.toFixed(2)}</td>
+                        <td>${b.was_martingale == 1 ? 'Nv ' + b.martingale_level : '-'}</td>
+                    </tr>`;
+                }).join('');
+            }
+        } catch (err) {
+            console.error('Erro:', err);
+        }
+    }
+
+    loadDashboard();
+    setInterval(loadDashboard, 15000);
+    </script>
+</body>
+</html>
