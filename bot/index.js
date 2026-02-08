@@ -19,8 +19,9 @@ class BotBlaze {
 
     async start() {
         console.log('=================================');
-        console.log('  BotBlaze Engine v3.0');
+        console.log('  BotBlaze Engine v4.0');
         console.log('  Double Game - Tempo Real');
+        console.log('  WebSocket + HTTP Polling');
         console.log('  Config via Painel Admin');
         console.log('=================================\n');
 
@@ -31,7 +32,7 @@ class BotBlaze {
         await this.loadSettings();
 
         const config = {
-            apiUrl: process.env.BLAZE_API_URL || 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1',
+            apiUrl: this.getSetting('blaze_api_url', '') || process.env.BLAZE_API_URL || 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1',
             analysisWindow: this.getSetting('analysis_window', 50),
             signalConfidenceMin: this.getSetting('confidence_min', 55)
         };
@@ -88,14 +89,38 @@ class BotBlaze {
             }
         };
 
-        // Inicia monitoramento com intervalo do banco
+        // EVENTO: fase do jogo mudou (waiting/rolling/complete) - via WS da Blaze
+        this.collector.onGamePhase = (event) => {
+            this.broadcast({
+                type: 'game_phase',
+                data: {
+                    phase: event.phase,
+                    timestamp: event.timestamp.toISOString()
+                }
+            });
+        };
+
+        // Inicia conexao WebSocket com a Blaze (tempo real)
+        const blazeWsUrl = this.getSetting('blaze_ws_url', '') || process.env.BLAZE_WS_URL || '';
+        if (blazeWsUrl) {
+            console.log(`[Bot] Conectando ao WebSocket da Blaze: ${blazeWsUrl}`);
+            this.collector.startStream(blazeWsUrl);
+        } else {
+            console.log('[Bot] WS da Blaze nao configurado. Configure em Admin > Config > URL WebSocket Blaze');
+            console.log('[Bot] URLs comuns: https://api-v2.blaze.com, https://api-v2.blaze1.space');
+        }
+
+        // Inicia HTTP polling (sempre ativo como fallback)
         this.startCollector();
 
-        // Verificacao backup a cada 10s (caso o evento nao pegue)
+        // Verificacao backup a cada 10s
         setInterval(() => this.runVerification(), 10000);
 
-        // Recarrega configuracoes do banco a cada 10s (admin pode ter mudado)
+        // Recarrega configuracoes do banco a cada 10s
         this.settingsTimer = setInterval(() => this.reloadSettings(), 10000);
+
+        // Envia status do collector a cada 5s
+        setInterval(() => this.broadcastCollectorStatus(), 5000);
 
         console.log('[Bot] Aguardando jogos...\n');
     }
@@ -109,7 +134,6 @@ class BotBlaze {
                 this.liveConfig[row.setting_key] = row.setting_value;
             }
         } catch (err) {
-            // Tabela pode nao existir ainda
             console.log('[Config] Usando defaults (tabela bot_settings nao encontrada)');
         }
     }
@@ -120,6 +144,8 @@ class BotBlaze {
         const oldConfidence = this.getSetting('confidence_min', 55);
         const oldAnalysisWindow = this.getSetting('analysis_window', 50);
         const oldHistoryLimit = this.getSetting('history_limit', 2000);
+        const oldApiUrl = this.getSetting('blaze_api_url', '');
+        const oldWsUrl = this.getSetting('blaze_ws_url', '');
 
         await this.loadSettings();
 
@@ -127,8 +153,10 @@ class BotBlaze {
         const newConfidence = this.getSetting('confidence_min', 55);
         const newAnalysisWindow = this.getSetting('analysis_window', 50);
         const newHistoryLimit = this.getSetting('history_limit', 2000);
+        const newApiUrl = this.getSetting('blaze_api_url', '');
+        const newWsUrl = this.getSetting('blaze_ws_url', '');
 
-        // Intervalo de coleta mudou? Reinicia o collector
+        // Intervalo de coleta mudou?
         if (newInterval !== oldInterval) {
             console.log(`[Config] Intervalo alterado: ${oldInterval}s -> ${newInterval}s`);
             this.collector.stop();
@@ -136,7 +164,7 @@ class BotBlaze {
             this.startCollector();
         }
 
-        // Confianca mudou? Atualiza analyzer e signals
+        // Confianca mudou?
         if (newConfidence !== oldConfidence) {
             console.log(`[Config] Confianca alterada: ${oldConfidence}% -> ${newConfidence}%`);
             this.analyzer.minConfidence = newConfidence;
@@ -152,11 +180,32 @@ class BotBlaze {
         if (newHistoryLimit !== oldHistoryLimit) {
             console.log(`[Config] Limite historico: ${oldHistoryLimit} -> ${newHistoryLimit}`);
         }
+
+        // API URL mudou?
+        if (newApiUrl && newApiUrl !== oldApiUrl) {
+            console.log(`[Config] API URL alterada para: ${newApiUrl}`);
+            this.collector.apiUrl = newApiUrl;
+        }
+
+        // WS URL mudou?
+        if (newWsUrl !== oldWsUrl) {
+            if (newWsUrl) {
+                console.log(`[Config] WS URL alterada para: ${newWsUrl}`);
+                if (this.collector.stream) {
+                    this.collector.stream.updateUrl(newWsUrl);
+                } else {
+                    this.collector.startStream(newWsUrl);
+                }
+            } else if (this.collector.stream) {
+                console.log(`[Config] WS URL removida, desconectando stream`);
+                this.collector.stopStream();
+            }
+        }
     }
 
     getSetting(key, defaultVal) {
         const val = this.liveConfig[key];
-        if (val === undefined || val === null) return defaultVal;
+        if (val === undefined || val === null || val === '') return defaultVal;
         if (typeof defaultVal === 'number') return parseInt(val) || defaultVal;
         return val;
     }
@@ -168,6 +217,15 @@ class BotBlaze {
         console.log(`[Collector] Monitorando API a cada ${seconds}s...`);
         this.collector.collect();
         this.collector.timer = setInterval(() => this.collector.collect(), intervalMs);
+    }
+
+    broadcastCollectorStatus() {
+        if (!this.collector) return;
+        const status = this.collector.getStatus();
+        this.broadcast({
+            type: 'collector_status',
+            data: status
+        });
     }
 
     async connectDB() {
@@ -222,7 +280,8 @@ class BotBlaze {
                     ['strategy_martingale', '1'], ['strategy_ml_patterns', '1'],
                     ['signals_active', '1'], ['max_signals_per_round', '4'],
                     ['analysis_window', '50'], ['history_limit', '2000'],
-                    ['time_offset', '0'], ['bot_status', 'running']
+                    ['time_offset', '0'], ['bot_status', 'running'],
+                    ['blaze_api_url', ''], ['blaze_ws_url', '']
                 ];
                 for (const [k, v] of defaults) {
                     await this.db.execute(
@@ -230,6 +289,14 @@ class BotBlaze {
                     );
                 }
                 console.log('[DB] Configuracoes padrao criadas');
+            }
+
+            // Adiciona novas settings se nao existem
+            const newSettings = [['blaze_api_url', ''], ['blaze_ws_url', '']];
+            for (const [k, v] of newSettings) {
+                await this.db.execute(
+                    'INSERT IGNORE INTO bot_settings (setting_key, setting_value) VALUES (?, ?)', [k, v]
+                );
             }
         } catch (err) { }
 
@@ -240,7 +307,7 @@ class BotBlaze {
         const port = parseInt(process.env.BOT_PORT) || 3001;
         this.wss = new WebSocketServer({ port });
         this.wss.on('connection', async (ws) => {
-            ws.send(JSON.stringify({ type: 'connected', message: 'BotBlaze v2 conectado' }));
+            ws.send(JSON.stringify({ type: 'connected', message: 'BotBlaze v4 conectado' }));
 
             // Envia ultimos jogos para o carousel do dashboard
             try {
@@ -249,6 +316,11 @@ class BotBlaze {
                 );
                 ws.send(JSON.stringify({ type: 'recent_games', data: { games: recentGames } }));
             } catch (e) {}
+
+            // Envia status do collector
+            if (this.collector) {
+                ws.send(JSON.stringify({ type: 'collector_status', data: this.collector.getStatus() }));
+            }
         });
         console.log(`[WS] WebSocket porta ${port}\n`);
     }

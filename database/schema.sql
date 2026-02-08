@@ -128,5 +128,7 @@ INSERT INTO bot_settings (setting_key, setting_value) VALUES
 ('analysis_window', '50'),
 ('history_limit', '2000'),
 ('time_offset', '0'),
-('bot_status', 'running')
+('bot_status', 'running'),
+('blaze_api_url', ''),
+('blaze_ws_url', '')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;

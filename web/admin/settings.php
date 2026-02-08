@@ -26,6 +26,50 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <div class="settings-grid">
+            <!-- Conexao com a Blaze -->
+            <div class="panel" style="grid-column: 1 / -1;">
+                <div class="panel-header">
+                    <h2>Conexao com a Blaze</h2>
+                    <span class="badge" id="blaze-ws-badge">Desconectado</span>
+                </div>
+                <div class="panel-body">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>URL API HTTP (para coleta de jogos)</span>
+                        </div>
+                        <input type="text" class="setting-input" id="blaze_api_url"
+                            placeholder="https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1"
+                            value="">
+                        <p class="setting-hint">URL da API REST da Blaze para buscar jogos recentes. Deixe vazio para usar o padrao do .env</p>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span>URL WebSocket Blaze (tempo real)</span>
+                        </div>
+                        <input type="text" class="setting-input" id="blaze_ws_url"
+                            placeholder="https://api-v2.blaze.com"
+                            value="">
+                        <p class="setting-hint">URL do WebSocket da Blaze para receber jogos em tempo real (Socket.IO). URLs comuns: <code>https://api-v2.blaze.com</code> ou <code>https://api-v2.blaze1.space</code></p>
+                    </div>
+
+                    <div class="blaze-conn-status" id="blaze-conn-info">
+                        <div class="conn-row">
+                            <span class="conn-label">Blaze WebSocket:</span>
+                            <span class="conn-val" id="blaze-ws-status">--</span>
+                        </div>
+                        <div class="conn-row">
+                            <span class="conn-label">HTTP Polling:</span>
+                            <span class="conn-val" id="blaze-http-status">Ativo</span>
+                        </div>
+                        <div class="conn-row">
+                            <span class="conn-label">Fase do Jogo:</span>
+                            <span class="conn-val" id="blaze-game-phase">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Sincronia e Velocidade -->
             <div class="panel">
                 <div class="panel-header"><h2>Sincronia e Velocidade</h2></div>
@@ -37,7 +81,7 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
                         <input type="range" class="setting-range" id="collect_interval" min="1" max="15" step="1" value="3">
                         <div class="setting-range-labels"><span>1s (rapido)</span><span>15s (lento)</span></div>
-                        <p class="setting-hint">Quanto menor, mais rapido detecta jogos novos. Valores baixos consomem mais recursos.</p>
+                        <p class="setting-hint">Intervalo do HTTP polling (fallback). Se o WebSocket estiver conectado, jogos chegam instantaneamente.</p>
                     </div>
 
                     <div class="setting-item">
@@ -350,6 +394,54 @@ require_once __DIR__ . '/../includes/header.php';
     color: var(--text-primary);
 }
 
+/* Text inputs */
+.setting-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: monospace;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.setting-input:focus {
+    border-color: var(--accent);
+}
+.setting-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+.setting-hint code {
+    background: rgba(255,255,255,0.08);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+/* Blaze connection status */
+.blaze-conn-status {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.conn-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+}
+.conn-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+.conn-label { color: var(--text-muted); }
+.conn-val { font-weight: 600; }
+.conn-val.connected { color: var(--green); }
+.conn-val.disconnected { color: var(--red); }
+
 /* Save indicator */
 .saving-indicator {
     position: fixed;
@@ -410,6 +502,12 @@ function applyToUI(s) {
                 else val.textContent = s[key];
             }
         }
+    });
+
+    // Text inputs (URLs)
+    ['blaze_api_url', 'blaze_ws_url'].forEach(key => {
+        const el = document.getElementById(key);
+        if (el && s[key] !== undefined) el.value = s[key];
     });
 
     // Checkboxes
@@ -492,6 +590,19 @@ function showSaveToast() {
     });
 });
 
+// Event listeners para text inputs (URLs)
+['blaze_api_url', 'blaze_ws_url'].forEach(key => {
+    const el = document.getElementById(key);
+    if (!el) return;
+    let inputTimer = null;
+    el.addEventListener('input', () => {
+        clearTimeout(inputTimer);
+        inputTimer = setTimeout(() => {
+            saveSettings({ [key]: el.value.trim() });
+        }, 800); // debounce maior para texto
+    });
+});
+
 // Event listeners para bot status
 document.querySelectorAll('#bot-status-group .toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -533,8 +644,18 @@ function connectWS() {
                     document.getElementById('win-rate').textContent = (s.winRate || '0') + '%';
                 }
 
+                if (msg.type === 'collector_status' && msg.data) {
+                    updateCollectorStatus(msg.data);
+                }
+
+                if (msg.type === 'game_phase' && msg.data) {
+                    const phaseNames = { 'waiting': 'Aguardando apostas', 'rolling': 'Girando!', 'complete': 'Resultado' };
+                    const phaseEl = document.getElementById('blaze-game-phase');
+                    if (phaseEl) phaseEl.textContent = phaseNames[msg.data.phase] || msg.data.phase;
+                }
+
                 if (msg.type === 'bot_settings_updated') {
-                    loadSettings(); // Recarrega configs se outro admin alterou
+                    loadSettings();
                 }
             } catch (e) {}
         };
@@ -548,6 +669,35 @@ function connectWS() {
         ws.onerror = () => ws.close();
     } catch (e) {
         setTimeout(connectWS, 10000);
+    }
+}
+
+function updateCollectorStatus(data) {
+    const wsStatus = document.getElementById('blaze-ws-status');
+    const badge = document.getElementById('blaze-ws-badge');
+    const httpStatus = document.getElementById('blaze-http-status');
+    const phaseEl = document.getElementById('blaze-game-phase');
+
+    if (wsStatus) {
+        if (data.wsConnected) {
+            wsStatus.textContent = 'Conectado';
+            wsStatus.className = 'conn-val connected';
+            if (badge) { badge.textContent = 'WS Conectado'; badge.className = 'badge badge-green'; }
+        } else {
+            wsStatus.textContent = 'Desconectado';
+            wsStatus.className = 'conn-val disconnected';
+            if (badge) { badge.textContent = 'Apenas HTTP'; badge.className = 'badge badge-yellow'; }
+        }
+    }
+
+    if (httpStatus) {
+        httpStatus.textContent = `Ativo (a cada ${data.pollInterval || 3}s)`;
+        httpStatus.className = 'conn-val connected';
+    }
+
+    if (phaseEl && data.gamePhase) {
+        const phaseNames = { 'waiting': 'Aguardando apostas', 'rolling': 'Girando!', 'complete': 'Resultado' };
+        phaseEl.textContent = phaseNames[data.gamePhase] || data.gamePhase;
     }
 }
 

@@ -710,6 +710,23 @@ function addToRouletteHistory(newGame) {
     dots.insertBefore(dot, dots.firstChild);
     while (dots.children.length > 25) dots.removeChild(dots.lastChild);
 }
+// Recebe fase do jogo via WebSocket da Blaze (via bot)
+function handleGamePhase(phase) {
+    if (phase === 'waiting') {
+        if (rouletteState !== 'spinning') {
+            setRouletteStatus('waiting');
+            rouletteState = 'waiting';
+        }
+    } else if (phase === 'rolling') {
+        if (rouletteState !== 'spinning') {
+            setRouletteStatus('spinning');
+            rouletteState = 'spinning';
+        }
+    } else if (phase === 'complete') {
+        // Resultado - o new_game event vai disparar a animacao
+    }
+}
+
 function loadRouletteState() {
     fetch('/api/game-state.php')
         .then(r => r.json())
@@ -773,6 +790,25 @@ function connectWebSocket() {
                 if (msg.type === 'stats_update') {
                     if (msg.data.stats) updateAdminSignalStats(msg.data.stats);
                     refreshStrategyPanels();
+                }
+
+                // Fase do jogo via Blaze WS (tempo real perfeito)
+                if (msg.type === 'game_phase' && msg.data) {
+                    handleGamePhase(msg.data.phase);
+                }
+
+                // Status do collector (mostra se WS da Blaze esta conectado)
+                if (msg.type === 'collector_status' && msg.data) {
+                    const indicator = document.getElementById('live-indicator');
+                    if (indicator) {
+                        if (msg.data.wsConnected) {
+                            indicator.textContent = 'WS TEMPO REAL';
+                            indicator.className = 'badge badge-live';
+                        } else {
+                            indicator.textContent = 'HTTP POLLING';
+                            indicator.className = 'badge badge-yellow';
+                        }
+                    }
                 }
             } catch (e) {
                 console.error('[WS] Erro parse:', e);

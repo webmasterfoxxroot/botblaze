@@ -956,8 +956,18 @@ function connectWebSocket() {
 
                 if (msg.type === 'stats_update') {
                     if (msg.data.stats) updateStatsFromData(msg.data.stats);
-                    // Recarrega paineis de estrategia
                     refreshStrategyPanels();
+                }
+
+                // Fase do jogo via Blaze WS (sincronizado)
+                if (msg.type === 'game_phase' && msg.data) {
+                    if (msg.data.phase === 'waiting' && rouletteState !== 'spinning') {
+                        setRouletteStatus('waiting');
+                        rouletteState = 'waiting';
+                    } else if (msg.data.phase === 'rolling' && rouletteState !== 'spinning') {
+                        setRouletteStatus('spinning');
+                        rouletteState = 'spinning';
+                    }
                 }
             } catch (e) {
                 console.error('[WS] Erro parse:', e);
