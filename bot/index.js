@@ -26,7 +26,7 @@ class BotBlaze {
 
         const config = {
             apiUrl: process.env.BLAZE_API_URL || 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1',
-            collectInterval: parseInt(process.env.COLLECT_INTERVAL) || 30000,
+            collectInterval: parseInt(process.env.COLLECT_INTERVAL) || 15000,
             analysisWindow: parseInt(process.env.ANALYSIS_WINDOW) || 50,
             signalConfidenceMin: parseInt(process.env.SIGNAL_CONFIDENCE_MIN) || 65
         };
@@ -42,7 +42,7 @@ class BotBlaze {
         console.log('[Bot] Verificacao de sinais a cada 10s');
         setInterval(() => this.runVerification(), 10000);
 
-        // Analise a cada 35s
+        // Analise a cada 20s
         const analysisInterval = config.collectInterval + 5000;
         console.log(`[Bot] Analise a cada ${analysisInterval / 1000}s\n`);
         setInterval(() => this.runAnalysis(), analysisInterval);

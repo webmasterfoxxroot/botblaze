@@ -1,6 +1,7 @@
 /**
- * Estrategia de Sequencias
- * Analisa padroes de cores consecutivas para prever a proxima
+ * Estrategia: Matriz de Transicao
+ * Dado o padrao das ultimas N cores, qual a proxima cor mais provavel?
+ * Usa dados REAIS do historico, nao teoria.
  */
 
 class SequenceStrategy {
@@ -8,111 +9,90 @@ class SequenceStrategy {
         this.name = 'sequences';
     }
 
-    analyze(games) {
-        if (games.length < 10) return null;
+    analyze(games, allHistory) {
+        if (games.length < 20) return null;
 
-        const colors = games.map(g => g.color);
-        const result = {
+        // Converte pra ordem cronologica (index 0 = mais antigo)
+        const recent = games.map(g => g.color).reverse();
+        const history = (allHistory || games).map(g => g.color).reverse();
+
+        const predictions = [];
+
+        // Analise com profundidade 4 (mais especifico, menos amostras)
+        const pred4 = this.analyzeDepth(recent, history, 4);
+        if (pred4) predictions.push(pred4);
+
+        // Analise com profundidade 3
+        if (!predictions.length) {
+            const pred3 = this.analyzeDepth(recent, history, 3);
+            if (pred3) predictions.push(pred3);
+        }
+
+        // Analise com profundidade 2 (mais amostras, menos especifico)
+        if (!predictions.length) {
+            const pred2 = this.analyzeDepth(recent, history, 2);
+            if (pred2) predictions.push(pred2);
+        }
+
+        return {
             strategy: this.name,
-            predictions: [],
-            patterns: {}
+            predictions
         };
-
-        // Sequencia atual (quantas da mesma cor seguidas)
-        const currentStreak = this.getCurrentStreak(colors);
-        result.patterns.currentStreak = currentStreak;
-
-        // Apos 3+ da mesma cor, tendencia de inverter
-        if (currentStreak.count >= 3 && currentStreak.color !== 0) {
-            const oppositeColor = currentStreak.color === 1 ? 2 : 1;
-            const confidence = Math.min(50 + (currentStreak.count * 8), 85);
-            result.predictions.push({
-                color: oppositeColor,
-                confidence,
-                reason: `${currentStreak.count}x ${this.colorName(currentStreak.color)} seguidos - tendencia de inversao`
-            });
-        }
-
-        // Padrao de alternancia (ex: vermelho, preto, vermelho, preto)
-        const alternating = this.checkAlternating(colors);
-        if (alternating.isAlternating && alternating.length >= 4) {
-            const nextColor = colors[0] === 1 ? 2 : 1;
-            result.predictions.push({
-                color: nextColor,
-                confidence: 55 + (alternating.length * 3),
-                reason: `Padrao alternante detectado (${alternating.length} rodadas)`
-            });
-        }
-
-        // Padrao de duplas (ex: 2 verm, 2 preto, 2 verm)
-        const doubles = this.checkDoubles(colors);
-        if (doubles.detected) {
-            result.predictions.push({
-                color: doubles.nextColor,
-                confidence: 55,
-                reason: `Padrao de duplas detectado`
-            });
-        }
-
-        // Branco: se nao apareceu nas ultimas 25+, aumenta probabilidade
-        const lastWhite = colors.indexOf(0);
-        if (lastWhite === -1 || lastWhite > 25) {
-            const roundsSince = lastWhite === -1 ? colors.length : lastWhite;
-            result.predictions.push({
-                color: 0,
-                confidence: Math.min(30 + (roundsSince * 1.5), 60),
-                reason: `Branco ausente ha ${roundsSince} rodadas`
-            });
-        }
-
-        return result;
     }
 
-    getCurrentStreak(colors) {
-        let count = 1;
-        const color = colors[0];
-        for (let i = 1; i < colors.length; i++) {
-            if (colors[i] === color) count++;
-            else break;
-        }
-        return { color, count };
-    }
+    analyzeDepth(recent, history, depth) {
+        if (recent.length < depth) return null;
 
-    checkAlternating(colors) {
-        let length = 1;
-        for (let i = 1; i < colors.length; i++) {
-            if (colors[i] !== colors[i - 1] && colors[i] !== 0 && colors[i - 1] !== 0) {
-                length++;
-            } else break;
-        }
-        return { isAlternating: length >= 4, length };
-    }
+        // Padrao atual (ultimas N cores)
+        const pattern = recent.slice(-depth);
+        const patternKey = pattern.join(',');
 
-    checkDoubles(colors) {
-        const filtered = colors.filter(c => c !== 0).slice(0, 12);
-        if (filtered.length < 6) return { detected: false };
+        // Conta o que veio depois desse padrao no historico
+        const nextCounts = { 0: 0, 1: 0, 2: 0 };
+        let total = 0;
 
-        let isDoubles = true;
-        for (let i = 0; i < 6; i += 2) {
-            if (filtered[i] !== filtered[i + 1]) {
-                isDoubles = false;
-                break;
+        for (let i = 0; i <= history.length - depth - 1; i++) {
+            let match = true;
+            for (let j = 0; j < depth; j++) {
+                if (history[i + j] !== pattern[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                const nextColor = history[i + depth];
+                if (nextColor !== undefined) {
+                    nextCounts[nextColor]++;
+                    total++;
+                }
             }
         }
 
-        if (isDoubles) {
-            const lastPairColor = filtered[0];
-            return {
-                detected: true,
-                nextColor: lastPairColor === 1 ? 2 : 1
-            };
-        }
-        return { detected: false };
-    }
+        // Precisa de amostras suficientes
+        const minSamples = depth >= 4 ? 3 : (depth >= 3 ? 5 : 8);
+        if (total < minSamples) return null;
 
-    colorName(color) {
-        const names = { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' };
-        return names[color] || 'Desconhecido';
+        // Encontra a cor com maior probabilidade
+        let bestColor = -1, bestPct = 0;
+        for (const c of [0, 1, 2]) {
+            const pct = (nextCounts[c] / total) * 100;
+            if (pct > bestPct) {
+                bestPct = pct;
+                bestColor = c;
+            }
+        }
+
+        // So sinaliza se probabilidade > 55%
+        if (bestPct < 55 || bestColor < 0) return null;
+
+        const colorNames = { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' };
+        const patternStr = pattern.map(c => colorNames[c]?.[0] || '?').join('');
+
+        return {
+            color: bestColor,
+            confidence: Math.min(Math.round(bestPct), 90),
+            reason: `Padrao [${patternStr}] → ${colorNames[bestColor]} ${bestPct.toFixed(0)}% (${total} amostras, prof ${depth})`
+        };
     }
 }
 

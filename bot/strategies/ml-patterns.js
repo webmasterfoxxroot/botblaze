@@ -1,149 +1,178 @@
 /**
- * Estrategia ML Patterns
- * Machine Learning basico: reconhecimento de padroes usando historico
- * Usa sliding window para encontrar padroes similares no passado
+ * Estrategia: Pattern Mining + Numero (Roll)
+ * Analisa padroes por NUMERO (roll 0-14) e tambem cor
+ * Tipo "tip miner" - memoriza quais numeros saem apos outros
  */
 
 class MLPatternsStrategy {
     constructor() {
         this.name = 'ml-patterns';
-        this.windowSize = 5; // tamanho do padrao a buscar
     }
 
     analyze(games, allHistory) {
-        if (games.length < 10) return null;
+        if (games.length < 20) return null;
 
-        const colors = games.map(g => g.color);
-        const historyColors = (allHistory || games).map(g => g.color);
+        const history = allHistory || games;
+        const predictions = [];
 
-        const result = {
+        // 1. Pattern Mining por cor com janela deslizante (3,4,5)
+        const colorPred = this.patternMine(
+            games.map(g => g.color),
+            history.map(g => g.color),
+            [5, 4, 3]
+        );
+        if (colorPred) predictions.push(colorPred);
+
+        // 2. Analise por NUMERO (roll) - qual numero sai apos qual
+        const rollPred = this.rollAnalysis(games, history);
+        if (rollPred) predictions.push(rollPred);
+
+        // 3. Analise de horario (qual cor mais sai nesta hora)
+        const hourPred = this.hourAnalysis(games, history);
+        if (hourPred && !predictions.length) predictions.push(hourPred);
+
+        return {
             strategy: this.name,
-            predictions: [],
-            patterns: {}
+            predictions
         };
+    }
 
-        // Pega o padrao atual (ultimas N rodadas)
-        const currentPattern = colors.slice(0, this.windowSize);
-        result.patterns.current = currentPattern;
+    patternMine(recentColors, historyColors, windowSizes) {
+        // Converte pra cronologico
+        const recent = [...recentColors].reverse();
+        const hist = [...historyColors].reverse();
 
-        // Busca este padrao no historico completo
-        const matches = this.findPatternInHistory(currentPattern, historyColors);
-        result.patterns.matchesFound = matches.length;
+        for (const ws of windowSizes) {
+            if (recent.length < ws) continue;
 
-        if (matches.length >= 3) {
-            // Contabiliza o que veio DEPOIS de cada match
-            const nextColors = { 0: 0, 1: 0, 2: 0 };
-            let totalNext = 0;
+            const pattern = recent.slice(-ws);
+            const nextCounts = { 0: 0, 1: 0, 2: 0 };
+            let total = 0;
 
-            for (const match of matches) {
-                if (match.nextColor !== undefined) {
-                    nextColors[match.nextColor]++;
-                    totalNext++;
-                }
-            }
-
-            if (totalNext > 0) {
-                // Encontra a cor mais provavel
-                let bestColor = 1;
-                let bestCount = 0;
-                for (const [color, count] of Object.entries(nextColors)) {
-                    if (count > bestCount) {
-                        bestCount = count;
-                        bestColor = parseInt(color);
+            // Busca padrao no historico
+            for (let i = 0; i <= hist.length - ws - 1; i++) {
+                let match = true;
+                for (let j = 0; j < ws; j++) {
+                    if (hist[i + j] !== pattern[j]) {
+                        match = false;
+                        break;
                     }
                 }
-
-                const probability = bestCount / totalNext;
-                if (probability > 0.45) {
-                    result.predictions.push({
-                        color: bestColor,
-                        confidence: Math.min(Math.round(probability * 100), 85),
-                        reason: `ML: Padrao [${currentPattern.map(c => this.colorName(c)).join(',')}] encontrado ${matches.length}x no historico. Proxima cor mais provavel: ${this.colorName(bestColor)} (${(probability * 100).toFixed(1)}%)`,
-                        sampleSize: totalNext
-                    });
-                }
-            }
-        }
-
-        // Analise de transicao: probabilidade de ir de cor X para cor Y
-        const transitions = this.buildTransitionMatrix(historyColors);
-        result.patterns.transitions = transitions;
-
-        const lastColor = colors[0];
-        if (lastColor !== undefined && transitions[lastColor]) {
-            const trans = transitions[lastColor];
-            let bestNext = 1;
-            let bestProb = 0;
-
-            for (const [color, prob] of Object.entries(trans)) {
-                if (prob > bestProb) {
-                    bestProb = prob;
-                    bestNext = parseInt(color);
+                if (match && hist[i + ws] !== undefined) {
+                    nextCounts[hist[i + ws]]++;
+                    total++;
                 }
             }
 
-            if (bestProb > 0.52) {
-                result.predictions.push({
-                    color: bestNext,
-                    confidence: Math.min(Math.round(bestProb * 100), 75),
-                    reason: `ML Transicao: Apos ${this.colorName(lastColor)}, ${this.colorName(bestNext)} aparece ${(bestProb * 100).toFixed(1)}% das vezes`
-                });
+            const minSamples = ws >= 5 ? 2 : (ws >= 4 ? 3 : 5);
+            if (total < minSamples) continue;
+
+            let bestColor = -1, bestPct = 0;
+            for (const c of [0, 1, 2]) {
+                const pct = (nextCounts[c] / total) * 100;
+                if (pct > bestPct) {
+                    bestPct = pct;
+                    bestColor = c;
+                }
+            }
+
+            if (bestPct >= 58 && bestColor >= 0) {
+                const patternStr = pattern.map(c => 'BVP'[c] || '?').join('');
+                return {
+                    color: bestColor,
+                    confidence: Math.min(Math.round(bestPct), 88),
+                    reason: `ML: Padrao [${patternStr}] → ${this.colorName(bestColor)} ${bestPct.toFixed(0)}% (${total}x encontrado, janela ${ws})`
+                };
             }
         }
-
-        return result;
+        return null;
     }
 
-    findPatternInHistory(pattern, history) {
-        const matches = [];
-        const patternLen = pattern.length;
+    rollAnalysis(games, history) {
+        if (history.length < 100) return null;
 
-        // Comeca depois do padrao atual para nao contar ele mesmo
-        for (let i = patternLen; i < history.length - patternLen; i++) {
-            let isMatch = true;
-            for (let j = 0; j < patternLen; j++) {
-                if (history[i + j] !== pattern[j]) {
-                    isMatch = false;
-                    break;
-                }
-            }
-            if (isMatch && i > 0) {
-                matches.push({
-                    position: i,
-                    nextColor: history[i - 1]
-                });
+        // Qual cor sai apos cada numero (roll)?
+        const lastRoll = games[0].roll; // Ultimo numero que saiu
+        const rollToColor = {};
+
+        // Ordem cronologica
+        const chrono = [...history].reverse();
+        for (let i = 0; i < chrono.length - 1; i++) {
+            const roll = chrono[i].roll;
+            const nextColor = chrono[i + 1].color;
+
+            if (!rollToColor[roll]) rollToColor[roll] = { 0: 0, 1: 0, 2: 0, total: 0 };
+            rollToColor[roll][nextColor]++;
+            rollToColor[roll].total++;
+        }
+
+        const data = rollToColor[lastRoll];
+        if (!data || data.total < 10) return null;
+
+        let bestColor = -1, bestPct = 0;
+        for (const c of [0, 1, 2]) {
+            const pct = (data[c] / data.total) * 100;
+            if (pct > bestPct) {
+                bestPct = pct;
+                bestColor = c;
             }
         }
 
-        return matches;
+        if (bestPct >= 55 && bestColor >= 0) {
+            return {
+                color: bestColor,
+                confidence: Math.min(Math.round(bestPct), 80),
+                reason: `Apos roll ${lastRoll} → ${this.colorName(bestColor)} ${bestPct.toFixed(0)}% (${data.total} amostras)`
+            };
+        }
+        return null;
     }
 
-    buildTransitionMatrix(colors) {
-        const transitions = { 0: {}, 1: {}, 2: {} };
-        const counts = { 0: 0, 1: 0, 2: 0 };
+    hourAnalysis(games, history) {
+        if (history.length < 200) return null;
 
-        for (let i = 1; i < colors.length; i++) {
-            const from = colors[i];
-            const to = colors[i - 1];
-            transitions[from][to] = (transitions[from][to] || 0) + 1;
-            counts[from]++;
-        }
+        const now = new Date();
+        const currentHour = now.getHours();
 
-        // Normaliza para probabilidades
-        for (const from of [0, 1, 2]) {
-            if (counts[from] > 0) {
-                for (const to of [0, 1, 2]) {
-                    transitions[from][to] = (transitions[from][to] || 0) / counts[from];
-                }
+        // Distribuicao de cores nesta hora (historico)
+        const hourCounts = { 0: 0, 1: 0, 2: 0 };
+        let hourTotal = 0;
+
+        for (const g of history) {
+            const gameHour = new Date(g.played_at).getHours();
+            if (gameHour === currentHour) {
+                hourCounts[g.color]++;
+                hourTotal++;
             }
         }
 
-        return transitions;
+        if (hourTotal < 30) return null;
+
+        // Distribuicao geral
+        const totalCounts = { 0: 0, 1: 0, 2: 0 };
+        history.forEach(g => totalCounts[g.color]++);
+        const totalAll = history.length || 1;
+
+        // Compara: alguma cor sai significativamente mais nesta hora?
+        for (const c of [1, 2]) {
+            const hourPct = (hourCounts[c] / hourTotal) * 100;
+            const generalPct = (totalCounts[c] / totalAll) * 100;
+            const diff = hourPct - generalPct;
+
+            if (diff > 8 && hourPct > 50) {
+                return {
+                    color: c,
+                    confidence: Math.min(Math.round(hourPct), 75),
+                    reason: `Hora ${currentHour}h: ${this.colorName(c)} sai ${hourPct.toFixed(0)}% (geral ${generalPct.toFixed(0)}%). ${hourTotal} jogos nesta hora`
+                };
+            }
+        }
+
+        return null;
     }
 
-    colorName(color) {
-        const names = { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' };
-        return names[color] || '?';
+    colorName(c) {
+        return { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' }[c] || '?';
     }
 }
 
