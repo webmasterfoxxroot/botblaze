@@ -104,4 +104,4 @@ INSERT INTO plans (name, slug, duration_days, price) VALUES
 
 -- Admin padrao (senha: admin123)
 INSERT INTO users (name, email, password, role) VALUES
-('Admin', 'admin@botblaze.com', '$2y$10$8K1p/0jGz5kQx3qZ0Z5Kq.YHXN0LdGYmPKFMjGJxMGxMm7C0XxKi', 'admin');
+('Admin', 'admin@botblaze.com', '$2y$12$LCm1x1nK/OrMVVGWadD4IO/e1AkNugSUrvoYVZbQNP4t299.odYPu', 'admin');
