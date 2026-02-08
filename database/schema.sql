@@ -62,9 +62,11 @@ CREATE TABLE IF NOT EXISTS signals (
     strategy_used VARCHAR(50) NOT NULL,
     result ENUM('pending', 'win', 'loss') DEFAULT 'pending',
     actual_color TINYINT NULL,
+    ref_game_db_id INT NULL COMMENT 'ID do ultimo jogo no momento do sinal',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_game_type (game_type),
-    INDEX idx_created (created_at)
+    INDEX idx_created (created_at),
+    INDEX idx_result (result)
 ) ENGINE=InnoDB;
 
 -- Apostas/Registros dos usuarios (tracking de ganho/perda)
