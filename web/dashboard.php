@@ -658,13 +658,6 @@ let lastGameId = null;
 let countdownTimer = null;
 let countdownSec = 0;
 
-// Mapeamento roll -> cor (Blaze Double: 0=branco, 1-7=vermelho, 8-14=preto)
-function rollToColor(roll) {
-    if (roll === 0) return 0; // branco
-    if (roll >= 1 && roll <= 7) return 1; // vermelho
-    return 2; // preto
-}
-
 function getCardClass(color) {
     return { 0: 'rc-white', 1: 'rc-red', 2: 'rc-black' }[parseInt(color)] || 'rc-black';
 }
@@ -679,11 +672,12 @@ function createCardHTML(game) {
     return `<div class="roulette-card ${cls}"><div class="roulette-card-inner">${roll}</div></div>`;
 }
 
-function generateRandomCards(count) {
+// Gera cards aleatorios SOMENTE para animacao de spin (nao para exibicao estatica)
+function generateSpinCards(count) {
     const cards = [];
     for (let i = 0; i < count; i++) {
         const roll = Math.floor(Math.random() * 15);
-        const color = rollToColor(roll);
+        const color = roll === 0 ? 0 : (roll <= 7 ? 1 : 2);
         cards.push({ roll, color });
     }
     return cards;
@@ -691,7 +685,7 @@ function generateRandomCards(count) {
 
 function initRoulette(games) {
     if (!games || games.length === 0) return;
-    // Ordem cronologica (antigo -> novo)
+    // API retorna mais recente primeiro - inverte para cronologico (antigo->novo)
     const chrono = [...games].reverse();
     rouletteGames.length = 0;
     chrono.forEach(g => rouletteGames.push(g));
@@ -701,35 +695,30 @@ function initRoulette(games) {
     if (rouletteGames.length > 0) {
         lastGameId = rouletteGames[rouletteGames.length - 1].game_id || rouletteGames[rouletteGames.length - 1].id;
     }
+
+    // Atualiza GIROS ANTERIORES com dados reais
+    updateRouletteHistoryFull(games);
 }
 
 function renderRouletteStatic() {
     const track = document.getElementById('roulette-track');
     if (!track) return;
 
-    // Mostra os ultimos ~8 jogos centrados
-    const recent = rouletteGames.slice(-8);
     const viewport = track.parentElement;
     const vpWidth = viewport ? viewport.offsetWidth : 800;
-    const cardWidth = window.innerWidth <= 768 ? 78 : 98; // card + gap
-    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98;
 
-    // Adiciona cards extras antes para preencher
-    const padBefore = generateRandomCards(centerCards);
-    const padAfter = generateRandomCards(centerCards + 2);
-
+    // Mostra TODOS os jogos reais no carousel (sem cards falsos)
     let html = '';
-    padBefore.forEach(g => html += createCardHTML(g));
-    recent.forEach(g => html += createCardHTML(g));
-    padAfter.forEach(g => html += createCardHTML(g));
+    rouletteGames.forEach(g => html += createCardHTML(g));
 
     track.classList.add('no-transition');
     track.innerHTML = html;
 
-    // Centraliza no ultimo jogo real
-    const totalBefore = padBefore.length + recent.length - 1;
-    const offset = totalBefore * cardWidth - vpWidth / 2 + cardWidth / 2;
-    track.style.transform = `translateX(-${offset}px)`;
+    // Posiciona para que o ULTIMO jogo (mais recente) fique no centro
+    const lastIndex = rouletteGames.length - 1;
+    const offset = lastIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
+    track.style.transform = `translateX(-${Math.max(0, offset)}px)`;
 
     requestAnimationFrame(() => {
         track.classList.remove('no-transition');
@@ -746,48 +735,44 @@ function spinRoulette(newGame) {
     const viewport = track.parentElement;
     const vpWidth = viewport ? viewport.offsetWidth : 800;
     const cardWidth = window.innerWidth <= 768 ? 78 : 98;
-    const centerCards = Math.floor(vpWidth / cardWidth / 2);
 
-    // Gera muitos cards aleatorios para a animacao + o resultado no final
-    const spinCards = generateRandomCards(30);
-    const padBefore = rouletteGames.slice(-3);
-    const padAfter = generateRandomCards(centerCards + 2);
+    // Ultimos jogos reais + cards aleatorios para animacao + resultado final
+    const realBefore = rouletteGames.slice(-5);
+    const spinCards = generateSpinCards(25);
 
     let html = '';
-    padBefore.forEach(g => html += createCardHTML(g));
+    realBefore.forEach(g => html += createCardHTML(g));
     spinCards.forEach(g => html += createCardHTML(g));
-    html += createCardHTML(newGame); // O resultado real
-    padAfter.forEach(g => html += createCardHTML(g));
+    html += createCardHTML(newGame); // O resultado REAL no final
 
-    // Posiciona no inicio sem transicao
+    // Posiciona mostrando os jogos reais (inicio)
     track.classList.add('no-transition');
     track.innerHTML = html;
     track.style.transform = `translateX(0px)`;
 
-    // Inicia animacao apos 1 frame
+    // Anima ate o resultado
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             track.classList.remove('no-transition');
-            // Para no card do resultado (posicao = padBefore + spinCards)
-            const targetIndex = padBefore.length + spinCards.length;
+            const targetIndex = realBefore.length + spinCards.length;
             const offset = targetIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
             track.style.transform = `translateX(-${offset}px)`;
         });
     });
 
-    // Apos animacao parar: mostra resultado
+    // Apos animacao: mostra resultado e volta a exibir dados reais
     setTimeout(() => {
         rouletteState = 'result';
-        const roll = newGame.roll;
-        const colorName = colorNames[parseInt(newGame.color)] || '?';
-        setRouletteStatus('result', `Blaze Girou ${roll}!`);
+        setRouletteStatus('result', `Blaze Girou ${newGame.roll}!`);
 
-        // Adiciona ao historico
+        // Adiciona ao array de jogos reais
         rouletteGames.push(newGame);
         if (rouletteGames.length > 20) rouletteGames.shift();
-        updateRouletteHistory(newGame);
 
-        // Volta para waiting apos 5s
+        // Atualiza giros anteriores
+        addToRouletteHistory(newGame);
+
+        // Apos 5s volta para view estatica com TODOS os dados reais
         setTimeout(() => {
             rouletteState = 'waiting';
             setRouletteStatus('waiting');
@@ -818,26 +803,19 @@ function setRouletteStatus(state, text) {
         statusText.textContent = text || 'Resultado!';
         progress.style.width = '0%';
         stopCountdown();
-    } else if (state === 'countdown') {
-        statusText.textContent = text || 'Girando Em...';
     }
 }
 
 function startCountdown() {
     stopCountdown();
     countdownSec = 30;
-    const progress = document.getElementById('roulette-progress');
-    const statusText = document.getElementById('roulette-status-text');
-
     countdownTimer = setInterval(() => {
         countdownSec--;
-        if (countdownSec <= 0) {
-            stopCountdown();
-            return;
-        }
+        if (countdownSec <= 0) { stopCountdown(); return; }
+        const statusText = document.getElementById('roulette-status-text');
+        const progress = document.getElementById('roulette-progress');
         if (statusText && rouletteState === 'waiting') {
-            const secs = countdownSec.toString().padStart(2, '0');
-            statusText.textContent = `Girando Em 00:${secs}`;
+            statusText.textContent = `Girando Em 00:${countdownSec.toString().padStart(2, '0')}`;
         }
         if (progress && rouletteState === 'waiting') {
             progress.style.width = ((30 - countdownSec) / 30 * 100) + '%';
@@ -846,13 +824,25 @@ function startCountdown() {
 }
 
 function stopCountdown() {
-    if (countdownTimer) {
-        clearInterval(countdownTimer);
-        countdownTimer = null;
-    }
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 }
 
-function updateRouletteHistory(newGame) {
+// Atualiza GIROS ANTERIORES inteiro com dados da API (mais recente primeiro)
+function updateRouletteHistoryFull(games) {
+    const dots = document.getElementById('roulette-history-dots');
+    if (!dots || !games) return;
+
+    let html = '';
+    games.forEach(g => {
+        const color = parseInt(g.color);
+        const cls = colorClasses[color] || 'white';
+        html += `<span class="rh-dot ${cls}" title="${g.roll}">${g.roll}</span>`;
+    });
+    dots.innerHTML = html;
+}
+
+// Adiciona UM novo jogo no inicio dos giros anteriores
+function addToRouletteHistory(newGame) {
     const dots = document.getElementById('roulette-history-dots');
     if (!dots) return;
 
@@ -862,16 +852,11 @@ function updateRouletteHistory(newGame) {
     dot.className = `rh-dot ${cls}`;
     dot.title = newGame.roll;
     dot.textContent = newGame.roll;
-
-    // Insere no inicio
     dots.insertBefore(dot, dots.firstChild);
-    // Remove excesso
-    while (dots.children.length > 25) {
-        dots.removeChild(dots.lastChild);
-    }
+    while (dots.children.length > 25) dots.removeChild(dots.lastChild);
 }
 
-// Carrega estado inicial da roleta
+// Carrega dados reais da API para a roleta
 function loadRouletteState() {
     fetch('/api/game-state.php')
         .then(r => r.json())
