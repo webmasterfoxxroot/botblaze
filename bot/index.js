@@ -202,7 +202,7 @@ class BotBlaze {
                 ['signals_active', '1'], ['max_signals_per_round', '4'],
                 ['analysis_window', '50'], ['history_limit', '2000'],
                 ['time_offset', '0'], ['bot_status', 'running'],
-                ['blaze_api_url', ''], ['blaze_ws_url', '']
+                ['blaze_api_url', '']
             ];
             for (const [k, v] of defaults) {
                 await this.db.execute(

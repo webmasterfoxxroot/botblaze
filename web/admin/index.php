@@ -605,12 +605,13 @@ function handleBlazeSync(data) {
 
     const newestId = data.games[0].id || data.games[0].game_id;
 
+    // SEMPRE atualiza GIROS ANTERIORES com dados DIRETO da API (espelho perfeito)
+    updateRouletteHistoryFull(data.games);
+
     // JOGO NOVO DETECTADO - anima!
     if (data.newGame && newestId !== lastSyncGameId && rouletteState !== 'spinning') {
         lastSyncGameId = newestId;
         spinRoulette(data.newGame);
-        // Atualiza GIROS ANTERIORES com dados DIRETO da API (espelho perfeito)
-        updateRouletteHistoryFull(data.games);
         return;
     }
 
