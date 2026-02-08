@@ -39,6 +39,12 @@ class BotBlaze {
         // EVENTO: quando detecta jogo novo, analisa IMEDIATAMENTE
         this.collector.onNewGame = async (newGame) => {
             try {
+                // 0. Envia evento de novo jogo IMEDIATAMENTE (para animacao no dashboard)
+                this.broadcast({
+                    type: 'new_game',
+                    data: { game: newGame, timestamp: new Date().toISOString() }
+                });
+
                 // 1. Verifica sinais pendentes (marca WIN/LOSS do sinal anterior)
                 await this.signals.verifyLastSignals();
 
@@ -115,8 +121,16 @@ class BotBlaze {
     startWebSocket() {
         const port = parseInt(process.env.BOT_PORT) || 3001;
         this.wss = new WebSocketServer({ port });
-        this.wss.on('connection', (ws) => {
+        this.wss.on('connection', async (ws) => {
             ws.send(JSON.stringify({ type: 'connected', message: 'BotBlaze v2 conectado' }));
+
+            // Envia ultimos jogos para o carousel do dashboard
+            try {
+                const [recentGames] = await this.db.execute(
+                    'SELECT game_id, color, roll, played_at FROM game_history_double ORDER BY played_at DESC LIMIT 20'
+                );
+                ws.send(JSON.stringify({ type: 'recent_games', data: { games: recentGames } }));
+            } catch (e) {}
         });
         console.log(`[WS] WebSocket porta ${port}\n`);
     }

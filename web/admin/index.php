@@ -97,6 +97,21 @@ foreach ($strategies as $strat) {
     ];
 }
 
+// Sinais ativos (pendentes)
+$activeSignals = $db->query("
+    SELECT id, predicted_color, confidence, strategy_used, created_at
+    FROM signals
+    WHERE game_type = 'double' AND result = 'pending'
+    AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+    ORDER BY confidence DESC
+    LIMIT 4
+")->fetchAll();
+
+// Ultimas rodadas para o carousel
+$lastGames = $db->query(
+    "SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 25"
+)->fetchAll();
+
 // Ultimos usuarios
 $recentUsers = $db->query("
     SELECT u.*,
@@ -106,7 +121,8 @@ $recentUsers = $db->query("
 ")->fetchAll();
 
 $colorNames = [0 => 'Branco', 1 => 'Vermelho', 2 => 'Preto'];
-$colorEmojis = [0 => '⚪', 1 => '🔴', 2 => '⬛'];
+$colorClasses = [0 => 'white', 1 => 'red', 2 => 'black'];
+$colorEmojis = [0 => '&#9898;', 1 => '&#128308;', 2 => '&#11035;'];
 
 $pageTitle = 'BotBlaze - Admin';
 require_once __DIR__ . '/../includes/header.php';
@@ -120,6 +136,75 @@ require_once __DIR__ . '/../includes/header.php';
     <?php if ($resetMsg): ?>
     <div class="alert alert-success"><?= htmlspecialchars($resetMsg) ?></div>
     <?php endif; ?>
+
+    <!-- SINAL ATIVO - Banner Principal (Admin ve mesmo sem assinatura) -->
+    <div id="active-signal-container">
+        <?php if (!empty($activeSignals)): ?>
+            <?php $best = $activeSignals[0]; ?>
+            <div class="active-signal-banner active-signal-<?= $colorClasses[$best['predicted_color']] ?>">
+                <div class="active-signal-pulse"></div>
+                <div class="active-signal-content">
+                    <div class="active-signal-label">SINAL ATIVO - APOSTE AGORA!</div>
+                    <div class="active-signal-color">
+                        <span class="active-signal-dot <?= $colorClasses[$best['predicted_color']] ?>"></span>
+                        <span class="active-signal-name"><?= $colorNames[$best['predicted_color']] ?></span>
+                    </div>
+                    <div class="active-signal-details">
+                        <span class="active-signal-conf"><?= round($best['confidence']) ?>% confianca</span>
+                        <span class="active-signal-strategy"><?= htmlspecialchars($strategyNames[$best['strategy_used']] ?? $best['strategy_used']) ?></span>
+                        <span class="active-signal-time"><?= date('H:i:s', strtotime($best['created_at'])) ?></span>
+                    </div>
+                    <?php if (count($activeSignals) > 1): ?>
+                    <div class="active-signal-others">
+                        <?php for ($i = 1; $i < count($activeSignals); $i++): $s = $activeSignals[$i]; ?>
+                            <span class="active-signal-mini">
+                                <span class="color-dot <?= $colorClasses[$s['predicted_color']] ?>"></span>
+                                <?= $colorNames[$s['predicted_color']] ?> <?= round($s['confidence']) ?>%
+                            </span>
+                        <?php endfor; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="active-signal-banner active-signal-waiting">
+                <div class="active-signal-content">
+                    <div class="active-signal-label">AGUARDANDO SINAL</div>
+                    <div class="active-signal-color">
+                        <span class="active-signal-name" style="font-size:18px;">Analisando proxima rodada...</span>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Ultimo Resultado -->
+    <div id="last-result-container"></div>
+
+    <!-- ROLETA VISUAL - Animacao do Jogo -->
+    <div class="roulette-container" id="roulette-container">
+        <div class="roulette-status" id="roulette-status">
+            <div class="roulette-status-bar" id="roulette-status-bar">
+                <div class="roulette-progress" id="roulette-progress"></div>
+                <span class="roulette-status-text" id="roulette-status-text">Aguardando...</span>
+            </div>
+        </div>
+        <div class="roulette-viewport">
+            <div class="roulette-pointer"></div>
+            <div class="roulette-track" id="roulette-track"></div>
+        </div>
+        <div class="roulette-online">
+            <span class="roulette-online-dot"></span> Online
+        </div>
+        <div class="roulette-history">
+            <div class="roulette-history-label">GIROS ANTERIORES</div>
+            <div class="roulette-history-dots" id="roulette-history-dots">
+                <?php foreach (array_slice($lastGames, 0, 25) as $g): ?>
+                    <span class="rh-dot <?= $colorClasses[$g['color']] ?>" title="<?= $g['roll'] ?>"><?= $g['roll'] ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
 
     <!-- Stats Gerais -->
     <div class="stats-grid stats-grid-6">
@@ -172,7 +257,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <?php foreach ($data['signals'] as $s): ?>
                     <div class="signal-row">
                         <span class="signal-row-color">
-                            <span class="color-dot <?= ['white','red','black'][$s['predicted_color']] ?>"></span>
+                            <span class="color-dot <?= $colorClasses[$s['predicted_color']] ?>"></span>
                             <?= $colorNames[$s['predicted_color']] ?>
                         </span>
                         <span class="signal-row-conf"><?= round($s['confidence']) ?>%</span>
@@ -290,12 +375,540 @@ require_once __DIR__ . '/../includes/header.php';
 }
 .signal-row-conf { color: var(--accent); font-weight: 700; }
 .signal-row-time { color: var(--text-muted); font-size: 12px; }
+
+/* SINAL ATIVO - Banner */
+.active-signal-banner {
+    position: relative;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    text-align: center;
+    overflow: hidden;
+    border: 2px solid;
+    animation: signalAppear 0.5s ease;
+}
+@keyframes signalAppear {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+.active-signal-red {
+    background: linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(239,68,68,0.05) 100%);
+    border-color: var(--red-dot);
+    box-shadow: 0 0 30px rgba(239,68,68,0.2);
+}
+.active-signal-black {
+    background: linear-gradient(135deg, rgba(26,26,46,0.4) 0%, rgba(26,26,46,0.15) 100%);
+    border-color: #444;
+    box-shadow: 0 0 30px rgba(100,100,100,0.15);
+}
+.active-signal-white {
+    background: linear-gradient(135deg, rgba(232,232,232,0.15) 0%, rgba(232,232,232,0.05) 100%);
+    border-color: var(--white-dot);
+    box-shadow: 0 0 30px rgba(232,232,232,0.15);
+}
+.active-signal-waiting {
+    background: var(--bg-card);
+    border-color: var(--border);
+    opacity: 0.7;
+}
+.active-signal-pulse {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: signalPulse 1.5s infinite;
+}
+@keyframes signalPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(63,185,80,0.6); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(63,185,80,0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(63,185,80,0); }
+}
+.active-signal-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--green);
+    margin-bottom: 12px;
+}
+.active-signal-waiting .active-signal-label { color: var(--text-muted); }
+.active-signal-color {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.active-signal-dot {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.active-signal-dot.red { background: var(--red-dot); box-shadow: 0 0 20px rgba(239,68,68,0.5); }
+.active-signal-dot.black { background: var(--black-dot); border: 2px solid var(--border); box-shadow: 0 0 20px rgba(100,100,100,0.3); }
+.active-signal-dot.white { background: var(--white-dot); box-shadow: 0 0 20px rgba(232,232,232,0.4); }
+.active-signal-name {
+    font-size: 28px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.active-signal-red .active-signal-name { color: var(--red-dot); }
+.active-signal-black .active-signal-name { color: #aaa; }
+.active-signal-white .active-signal-name { color: var(--white-dot); }
+.active-signal-details {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.active-signal-conf { font-weight: 700; color: var(--accent); font-size: 16px; }
+.active-signal-others {
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.active-signal-mini {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.last-result-banner {
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    animation: resultSlide 0.3s ease;
+}
+@keyframes resultSlide {
+    from { transform: translateY(-10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+.last-result-win {
+    background: rgba(63,185,80,0.15);
+    border: 1px solid var(--green);
+    color: var(--green);
+}
+.last-result-loss {
+    background: rgba(248,81,73,0.15);
+    border: 1px solid var(--red);
+    color: var(--red);
+}
+/* ROLETA VISUAL */
+.roulette-container { background: #1a1f2e; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+.roulette-status-bar { position: relative; height: 36px; background: #2a2f3e; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.roulette-progress { position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #e63946 0%, #ff4d5a 100%); transition: width 1s linear; width: 0%; }
+.roulette-status-bar.spinning .roulette-progress { width: 100% !important; }
+.roulette-status-bar.result .roulette-progress { width: 0% !important; }
+.roulette-status-text { position: relative; z-index: 2; font-size: 14px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.roulette-viewport { position: relative; height: 140px; overflow: hidden; display: flex; align-items: center; }
+.roulette-pointer { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; background: #fff; z-index: 10; transform: translateX(-50%); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+.roulette-pointer::before { content: ''; position: absolute; top: -6px; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid #fff; }
+.roulette-track { display: flex; gap: 8px; padding: 0 20px; transition: transform 3s cubic-bezier(0.15, 0.85, 0.3, 1); will-change: transform; }
+.roulette-track.no-transition { transition: none !important; }
+.roulette-card { flex-shrink: 0; width: 90px; height: 110px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.roulette-card-inner { width: 52px; height: 52px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; }
+.roulette-card.rc-red { background: linear-gradient(135deg, #b91c2c 0%, #8b1520 100%); box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+.roulette-card.rc-black { background: linear-gradient(135deg, #2d2d40 0%, #1a1a2e 100%); box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+.roulette-card.rc-white { background: linear-gradient(135deg, #ddd 0%, #aaa 100%); box-shadow: inset 0 0 20px rgba(0,0,0,0.15); }
+.roulette-card.rc-white .roulette-card-inner { border-color: rgba(0,0,0,0.15); color: #333; }
+.rc-icon { font-size: 22px; color: rgba(255,255,255,0.6); }
+.roulette-card.rc-white .rc-icon { color: #333; }
+.roulette-online { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 8px 16px; font-size: 13px; color: var(--green); font-weight: 600; }
+.roulette-online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+.roulette-history { border-top: 1px solid var(--border); padding: 12px 16px; }
+.roulette-history-label { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+.roulette-history-dots { display: flex; flex-wrap: wrap; gap: 4px; }
+.rh-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; cursor: default; }
+.rh-dot.red { background: #e63946; color: #fff; }
+.rh-dot.black { background: #1a1a2e; color: #fff; border: 1px solid #444; }
+.rh-dot.white { background: #e8e8e8; color: #333; }
+
 @media (max-width: 768px) {
     .strategies-grid { grid-template-columns: 1fr; }
+    .active-signal-name { font-size: 22px; }
+    .active-signal-dot { width: 30px; height: 30px; }
+    .active-signal-details { flex-direction: column; gap: 4px; }
+    .roulette-card { width: 70px; height: 90px; }
+    .roulette-card-inner { width: 40px; height: 40px; font-size: 14px; }
+    .roulette-viewport { height: 110px; }
 }
 </style>
 
 <script>
+const colorNames = { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' };
+const colorClasses = { 0: 'white', 1: 'red', 2: 'black' };
+const strategyNames = { 'sequences': 'Sequencias', 'frequency': 'Frequencia', 'martingale': 'Martingale', 'ml-patterns': 'ML Patterns' };
+
+let lastSignalId = null;
+let wsConnected = false;
+
+// === ROLETA VISUAL ===
+const rouletteGames = [];
+let rouletteState = 'waiting';
+let countdownTimer = null;
+let countdownSec = 0;
+
+function rollToColor(roll) {
+    if (roll === 0) return 0;
+    if (roll >= 1 && roll <= 7) return 1;
+    return 2;
+}
+function getCardClass(color) {
+    return { 0: 'rc-white', 1: 'rc-red', 2: 'rc-black' }[parseInt(color)] || 'rc-black';
+}
+function createCardHTML(game) {
+    const color = parseInt(game.color);
+    const cls = getCardClass(color);
+    if (color === 0) return `<div class="roulette-card ${cls}"><div class="roulette-card-inner"><span class="rc-icon">&#10070;</span></div></div>`;
+    return `<div class="roulette-card ${cls}"><div class="roulette-card-inner">${game.roll}</div></div>`;
+}
+function generateRandomCards(count) {
+    const cards = [];
+    for (let i = 0; i < count; i++) {
+        const roll = Math.floor(Math.random() * 15);
+        cards.push({ roll, color: rollToColor(roll) });
+    }
+    return cards;
+}
+function initRoulette(games) {
+    if (!games || games.length === 0) return;
+    const chrono = [...games].reverse();
+    rouletteGames.length = 0;
+    chrono.forEach(g => rouletteGames.push(g));
+    renderRouletteStatic();
+    setRouletteStatus('waiting');
+}
+function renderRouletteStatic() {
+    const track = document.getElementById('roulette-track');
+    if (!track) return;
+    const recent = rouletteGames.slice(-8);
+    const vpWidth = track.parentElement ? track.parentElement.offsetWidth : 800;
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98;
+    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+    const padBefore = generateRandomCards(centerCards);
+    const padAfter = generateRandomCards(centerCards + 2);
+    let html = '';
+    padBefore.forEach(g => html += createCardHTML(g));
+    recent.forEach(g => html += createCardHTML(g));
+    padAfter.forEach(g => html += createCardHTML(g));
+    track.classList.add('no-transition');
+    track.innerHTML = html;
+    const totalBefore = padBefore.length + recent.length - 1;
+    const offset = totalBefore * cardWidth - vpWidth / 2 + cardWidth / 2;
+    track.style.transform = `translateX(-${offset}px)`;
+    requestAnimationFrame(() => track.classList.remove('no-transition'));
+}
+function spinRoulette(newGame) {
+    rouletteState = 'spinning';
+    setRouletteStatus('spinning');
+    const track = document.getElementById('roulette-track');
+    if (!track) return;
+    const vpWidth = track.parentElement ? track.parentElement.offsetWidth : 800;
+    const cardWidth = window.innerWidth <= 768 ? 78 : 98;
+    const centerCards = Math.floor(vpWidth / cardWidth / 2);
+    const spinCards = generateRandomCards(30);
+    const padBefore = rouletteGames.slice(-3);
+    const padAfter = generateRandomCards(centerCards + 2);
+    let html = '';
+    padBefore.forEach(g => html += createCardHTML(g));
+    spinCards.forEach(g => html += createCardHTML(g));
+    html += createCardHTML(newGame);
+    padAfter.forEach(g => html += createCardHTML(g));
+    track.classList.add('no-transition');
+    track.innerHTML = html;
+    track.style.transform = `translateX(0px)`;
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            track.classList.remove('no-transition');
+            const targetIndex = padBefore.length + spinCards.length;
+            const offset = targetIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
+            track.style.transform = `translateX(-${offset}px)`;
+        });
+    });
+    setTimeout(() => {
+        rouletteState = 'result';
+        setRouletteStatus('result', `Blaze Girou ${newGame.roll}!`);
+        rouletteGames.push(newGame);
+        if (rouletteGames.length > 20) rouletteGames.shift();
+        updateRouletteHistory(newGame);
+        setTimeout(() => {
+            rouletteState = 'waiting';
+            setRouletteStatus('waiting');
+            renderRouletteStatic();
+        }, 5000);
+    }, 3500);
+}
+function setRouletteStatus(state, text) {
+    const bar = document.getElementById('roulette-status-bar');
+    const statusText = document.getElementById('roulette-status-text');
+    const progress = document.getElementById('roulette-progress');
+    if (!bar || !statusText || !progress) return;
+    bar.className = 'roulette-status-bar';
+    if (state === 'waiting') { statusText.textContent = 'Esperando...'; progress.style.width = '0%'; startCountdown(); }
+    else if (state === 'spinning') { bar.classList.add('spinning'); statusText.textContent = 'Girando...'; progress.style.width = '100%'; stopCountdown(); }
+    else if (state === 'result') { bar.classList.add('result'); statusText.textContent = text || 'Resultado!'; progress.style.width = '0%'; stopCountdown(); }
+}
+function startCountdown() {
+    stopCountdown();
+    countdownSec = 30;
+    countdownTimer = setInterval(() => {
+        countdownSec--;
+        if (countdownSec <= 0) { stopCountdown(); return; }
+        const statusText = document.getElementById('roulette-status-text');
+        const progress = document.getElementById('roulette-progress');
+        if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${countdownSec.toString().padStart(2,'0')}`;
+        if (progress && rouletteState === 'waiting') progress.style.width = ((30 - countdownSec) / 30 * 100) + '%';
+    }, 1000);
+}
+function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
+function updateRouletteHistory(newGame) {
+    const dots = document.getElementById('roulette-history-dots');
+    if (!dots) return;
+    const cls = colorClasses[parseInt(newGame.color)] || 'white';
+    const dot = document.createElement('span');
+    dot.className = `rh-dot ${cls}`;
+    dot.title = newGame.roll;
+    dot.textContent = newGame.roll;
+    dots.insertBefore(dot, dots.firstChild);
+    while (dots.children.length > 25) dots.removeChild(dots.lastChild);
+}
+function loadRouletteState() {
+    fetch('/api/game-state.php')
+        .then(r => r.json())
+        .then(data => { if (data.games && data.games.length > 0) initRoulette(data.games); })
+        .catch(() => {});
+}
+let lastPolledGameId = null;
+function pollGameState() {
+    fetch('/api/game-state.php')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.lastGame) return;
+            const gameId = data.lastGame.game_id;
+            if (lastPolledGameId === null) { lastPolledGameId = gameId; return; }
+            if (gameId !== lastPolledGameId && rouletteState !== 'spinning') {
+                lastPolledGameId = gameId;
+                spinRoulette(data.lastGame);
+            }
+        }).catch(() => {});
+}
+
+// === WebSocket para receber sinais em tempo real do bot ===
+function connectWebSocket() {
+    try {
+        const wsPort = <?= json_encode(getenv('BOT_PORT') ?: '3001') ?>;
+        const wsUrl = 'ws://' + window.location.hostname + ':' + wsPort;
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            wsConnected = true;
+            console.log('[WS] Conectado ao bot');
+            const indicator = document.getElementById('live-indicator');
+            if (indicator) { indicator.textContent = 'TEMPO REAL'; indicator.className = 'badge badge-live'; }
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+
+                if (msg.type === 'recent_games' && msg.data.games) {
+                    initRoulette(msg.data.games);
+                    if (msg.data.games.length > 0) lastPolledGameId = msg.data.games[0].game_id;
+                }
+
+                if (msg.type === 'new_game' && msg.data.game) {
+                    if (rouletteState !== 'spinning') spinRoulette(msg.data.game);
+                }
+
+                if (msg.type === 'signal') {
+                    showActiveSignal(msg.data);
+                }
+
+                if (msg.type === 'analysis') {
+                    if (msg.data.stats) updateAdminSignalStats(msg.data.stats);
+                    if (msg.data.signals && msg.data.signals.length > 0) {
+                        showActiveSignals(msg.data.signals);
+                    }
+                    refreshStrategyPanels();
+                }
+
+                if (msg.type === 'stats_update') {
+                    if (msg.data.stats) updateAdminSignalStats(msg.data.stats);
+                    refreshStrategyPanels();
+                }
+            } catch (e) {
+                console.error('[WS] Erro parse:', e);
+            }
+        };
+
+        ws.onclose = () => {
+            wsConnected = false;
+            console.log('[WS] Desconectado. Reconectando em 5s...');
+            const indicator = document.getElementById('live-indicator');
+            if (indicator) { indicator.textContent = 'RECONECTANDO'; indicator.className = 'badge badge-yellow'; }
+            setTimeout(connectWebSocket, 5000);
+        };
+
+        ws.onerror = () => {
+            ws.close();
+        };
+    } catch (e) {
+        console.log('[WS] Sem WebSocket, usando polling');
+        setTimeout(connectWebSocket, 10000);
+    }
+}
+
+function showActiveSignal(signal) {
+    const container = document.getElementById('active-signal-container');
+    if (!container) return;
+
+    const color = parseInt(signal.predicted_color);
+    const cls = colorClasses[color] || 'white';
+    const name = colorNames[color] || '?';
+    const conf = Math.round(signal.confidence);
+    const strategy = strategyNames[signal.strategy] || signal.strategy || '';
+    const time = signal.created_at ? new Date(signal.created_at).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR');
+
+    container.innerHTML = `
+        <div class="active-signal-banner active-signal-${cls}">
+            <div class="active-signal-pulse"></div>
+            <div class="active-signal-content">
+                <div class="active-signal-label">SINAL ATIVO - APOSTE AGORA!</div>
+                <div class="active-signal-color">
+                    <span class="active-signal-dot ${cls}"></span>
+                    <span class="active-signal-name">${name}</span>
+                </div>
+                <div class="active-signal-details">
+                    <span class="active-signal-conf">${conf}% confianca</span>
+                    <span class="active-signal-strategy">${strategy}</span>
+                    <span class="active-signal-time">${time}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    lastSignalId = signal.id;
+}
+
+function showActiveSignals(signals) {
+    if (!signals || signals.length === 0) return;
+    const sorted = [...signals].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    showActiveSignal(sorted[0]);
+}
+
+function updateAdminSignalStats(stats) {
+    const wins = parseInt(stats.wins) || 0;
+    const losses = parseInt(stats.losses) || 0;
+    const decided = wins + losses;
+    const winRate = decided > 0 ? (wins / decided * 100).toFixed(1) : '0';
+    updateStat('s-winRate', winRate + '%');
+}
+
+// === Polling: sinais ativos a cada 3s, admin stats a cada 5s ===
+function refreshActiveSignal() {
+    fetch('/api/active-signal.php')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('active-signal-container');
+            if (!container) return;
+
+            if (data.active && data.active.length > 0) {
+                const best = data.active[0];
+                if (best.id !== lastSignalId) {
+                    const color = parseInt(best.predicted_color);
+                    const cls = colorClasses[color] || 'white';
+                    const name = colorNames[color] || '?';
+                    const conf = Math.round(best.confidence);
+                    const strategy = strategyNames[best.strategy_used] || best.strategy_used || '';
+                    const time = new Date(best.created_at).toLocaleTimeString('pt-BR');
+
+                    let othersHtml = '';
+                    if (data.active.length > 1) {
+                        othersHtml = '<div class="active-signal-others">';
+                        for (let i = 1; i < data.active.length; i++) {
+                            const s = data.active[i];
+                            const sc = colorClasses[parseInt(s.predicted_color)] || 'white';
+                            const sn = colorNames[parseInt(s.predicted_color)] || '?';
+                            othersHtml += `<span class="active-signal-mini"><span class="color-dot ${sc}"></span>${sn} ${Math.round(s.confidence)}%</span>`;
+                        }
+                        othersHtml += '</div>';
+                    }
+
+                    container.innerHTML = `
+                        <div class="active-signal-banner active-signal-${cls}">
+                            <div class="active-signal-pulse"></div>
+                            <div class="active-signal-content">
+                                <div class="active-signal-label">SINAL ATIVO - APOSTE AGORA!</div>
+                                <div class="active-signal-color">
+                                    <span class="active-signal-dot ${cls}"></span>
+                                    <span class="active-signal-name">${name}</span>
+                                </div>
+                                <div class="active-signal-details">
+                                    <span class="active-signal-conf">${conf}% confianca</span>
+                                    <span class="active-signal-strategy">${strategy}</span>
+                                    <span class="active-signal-time">${time}</span>
+                                </div>
+                                ${othersHtml}
+                            </div>
+                        </div>
+                    `;
+                    lastSignalId = best.id;
+                }
+            } else {
+                if (lastSignalId !== null) {
+                    container.innerHTML = `
+                        <div class="active-signal-banner active-signal-waiting">
+                            <div class="active-signal-content">
+                                <div class="active-signal-label">AGUARDANDO SINAL</div>
+                                <div class="active-signal-color">
+                                    <span class="active-signal-name" style="font-size:18px;">Analisando proxima rodada...</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    lastSignalId = null;
+                }
+            }
+
+            // Mostra ultimo resultado
+            if (data.lastResolved) {
+                showLastResult(data.lastResolved);
+            }
+        })
+        .catch(() => {});
+}
+
+function showLastResult(signal) {
+    const container = document.getElementById('last-result-container');
+    if (!container) return;
+
+    const isWin = signal.result === 'win';
+    const predictedName = colorNames[parseInt(signal.predicted_color)] || '?';
+    const actualName = colorNames[parseInt(signal.actual_color)] || '?';
+
+    container.innerHTML = `
+        <div class="last-result-banner ${isWin ? 'last-result-win' : 'last-result-loss'}">
+            ${isWin ? 'WIN' : 'LOSS'} - Previu ${predictedName}, saiu ${actualName}
+            (${signal.strategy_used} - ${new Date(signal.created_at).toLocaleTimeString('pt-BR')})
+        </div>
+    `;
+}
+
 function refreshAdmin() {
     fetch('/api/admin-stats.php')
         .then(r => r.json())
@@ -309,7 +922,10 @@ function refreshAdmin() {
         })
         .catch(e => console.error('Erro:', e));
 
-    // Recarrega os paineis de estrategia via reload parcial
+    refreshStrategyPanels();
+}
+
+function refreshStrategyPanels() {
     fetch(window.location.href)
         .then(r => r.text())
         .then(html => {
@@ -333,7 +949,18 @@ function updateStat(id, value) {
     }
 }
 
-setInterval(refreshAdmin, 10000);
+// Inicia tudo
+loadRouletteState();
+connectWebSocket();
+
+// Polling de sinal ativo a cada 3s
+setInterval(refreshActiveSignal, 3000);
+
+// Polling de estado do jogo a cada 5s (fallback para animacao)
+setInterval(pollGameState, 5000);
+
+// Polling completo admin a cada 5s
+setInterval(refreshAdmin, 5000);
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
