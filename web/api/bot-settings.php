@@ -44,8 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'history_limit' => '2000',
         'time_offset' => '0',
         'bot_status' => 'running',
-        'blaze_api_url' => '',
-        'blaze_ws_url' => ''
+        'blaze_api_url' => ''
     ];
 
     foreach ($defaults as $k => $v) {
@@ -73,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'collect_interval', 'confidence_min', 'strategy_sequences', 'strategy_frequency',
         'strategy_martingale', 'strategy_ml_patterns', 'signals_active',
         'max_signals_per_round', 'analysis_window', 'history_limit',
-        'time_offset', 'bot_status', 'blaze_api_url', 'blaze_ws_url'
+        'time_offset', 'bot_status', 'blaze_api_url'
     ];
 
     $validations = [
@@ -114,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // URLs - sanitiza
-        if (in_array($key, ['blaze_api_url', 'blaze_ws_url'])) {
+        if ($key === 'blaze_api_url') {
             $val = filter_var($val, FILTER_SANITIZE_URL);
             // Permite vazio (usa default) ou URLs validas
             if ($val !== '' && !preg_match('#^https?://#i', $val)) {

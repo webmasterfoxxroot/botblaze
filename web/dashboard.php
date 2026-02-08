@@ -801,10 +801,13 @@ function handleBlazeSync(data) {
     if (!data || !data.games || data.games.length === 0) return;
     if (data.cycleTime) blazeCycleTime = data.cycleTime;
     const newestId = data.games[0].id || data.games[0].game_id;
+
+    // SEMPRE atualiza GIROS ANTERIORES com dados DIRETO da API (espelho perfeito)
+    updateRouletteHistoryFull(data.games);
+
     if (data.newGame && newestId !== lastSyncGameId && rouletteState !== 'spinning') {
         lastSyncGameId = newestId;
         spinRoulette(data.newGame);
-        updateRouletteHistoryFull(data.games);
         return;
     }
     if (lastSyncGameId === null) {

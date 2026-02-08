@@ -30,41 +30,27 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="panel" style="grid-column: 1 / -1;">
                 <div class="panel-header">
                     <h2>Conexao com a Blaze</h2>
-                    <span class="badge" id="blaze-ws-badge">Desconectado</span>
+                    <span class="badge badge-green" id="blaze-conn-badge">HTTP Polling</span>
                 </div>
                 <div class="panel-body">
                     <div class="setting-item">
                         <div class="setting-label">
-                            <span>URL API HTTP (para coleta de jogos)</span>
+                            <span>URL da API Blaze</span>
                         </div>
                         <input type="text" class="setting-input" id="blaze_api_url"
                             placeholder="https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1"
                             value="">
-                        <p class="setting-hint">URL da API REST da Blaze para buscar jogos recentes. Deixe vazio para usar o padrao do .env</p>
-                    </div>
-
-                    <div class="setting-item">
-                        <div class="setting-label">
-                            <span>URL WebSocket Blaze (tempo real)</span>
-                        </div>
-                        <input type="text" class="setting-input" id="blaze_ws_url"
-                            placeholder="URL do WebSocket da Blaze"
-                            value="">
-                        <p class="setting-hint">URL do WebSocket da Blaze para receber jogos em tempo real (Socket.IO). Coloque a URL correta do WebSocket da Blaze.</p>
+                        <p class="setting-hint">URL da API da Blaze para buscar jogos recentes. Deixe vazio para usar o padrao.</p>
                     </div>
 
                     <div class="blaze-conn-status" id="blaze-conn-info">
                         <div class="conn-row">
-                            <span class="conn-label">Blaze WebSocket:</span>
-                            <span class="conn-val" id="blaze-ws-status">--</span>
-                        </div>
-                        <div class="conn-row">
                             <span class="conn-label">HTTP Polling:</span>
-                            <span class="conn-val" id="blaze-http-status">Ativo</span>
+                            <span class="conn-val connected" id="blaze-http-status">Ativo</span>
                         </div>
                         <div class="conn-row">
-                            <span class="conn-label">Fase do Jogo:</span>
-                            <span class="conn-val" id="blaze-game-phase">--</span>
+                            <span class="conn-label">Ciclo Detectado:</span>
+                            <span class="conn-val" id="blaze-cycle-time">--</span>
                         </div>
                     </div>
                 </div>
@@ -505,7 +491,7 @@ function applyToUI(s) {
     });
 
     // Text inputs (URLs)
-    ['blaze_api_url', 'blaze_ws_url'].forEach(key => {
+    ['blaze_api_url'].forEach(key => {
         const el = document.getElementById(key);
         if (el && s[key] !== undefined) el.value = s[key];
     });
@@ -591,7 +577,7 @@ function showSaveToast() {
 });
 
 // Event listeners para text inputs (URLs)
-['blaze_api_url', 'blaze_ws_url'].forEach(key => {
+['blaze_api_url'].forEach(key => {
     const el = document.getElementById(key);
     if (!el) return;
     let inputTimer = null;
@@ -599,7 +585,7 @@ function showSaveToast() {
         clearTimeout(inputTimer);
         inputTimer = setTimeout(() => {
             saveSettings({ [key]: el.value.trim() });
-        }, 800); // debounce maior para texto
+        }, 800);
     });
 });
 
@@ -644,14 +630,13 @@ function connectWS() {
                     document.getElementById('win-rate').textContent = (s.winRate || '0') + '%';
                 }
 
-                if (msg.type === 'collector_status' && msg.data) {
-                    updateCollectorStatus(msg.data);
+                if (msg.type === 'blaze_sync' && msg.data) {
+                    const cycleEl = document.getElementById('blaze-cycle-time');
+                    if (cycleEl && msg.data.cycleTime) cycleEl.textContent = msg.data.cycleTime + 's';
                 }
 
-                if (msg.type === 'game_phase' && msg.data) {
-                    const phaseNames = { 'waiting': 'Aguardando apostas', 'rolling': 'Girando!', 'complete': 'Resultado' };
-                    const phaseEl = document.getElementById('blaze-game-phase');
-                    if (phaseEl) phaseEl.textContent = phaseNames[msg.data.phase] || msg.data.phase;
+                if (msg.type === 'collector_status' && msg.data) {
+                    updateCollectorStatus(msg.data);
                 }
 
                 if (msg.type === 'bot_settings_updated') {
@@ -673,31 +658,16 @@ function connectWS() {
 }
 
 function updateCollectorStatus(data) {
-    const wsStatus = document.getElementById('blaze-ws-status');
-    const badge = document.getElementById('blaze-ws-badge');
     const httpStatus = document.getElementById('blaze-http-status');
-    const phaseEl = document.getElementById('blaze-game-phase');
-
-    if (wsStatus) {
-        if (data.wsConnected) {
-            wsStatus.textContent = 'Conectado';
-            wsStatus.className = 'conn-val connected';
-            if (badge) { badge.textContent = 'WS Conectado'; badge.className = 'badge badge-green'; }
-        } else {
-            wsStatus.textContent = 'Desconectado';
-            wsStatus.className = 'conn-val disconnected';
-            if (badge) { badge.textContent = 'Apenas HTTP'; badge.className = 'badge badge-yellow'; }
-        }
-    }
+    const cycleEl = document.getElementById('blaze-cycle-time');
 
     if (httpStatus) {
-        httpStatus.textContent = `Ativo (a cada ${data.pollInterval || 3}s)`;
+        httpStatus.textContent = `Ativo (a cada ${data.pollInterval || 1}s)`;
         httpStatus.className = 'conn-val connected';
     }
 
-    if (phaseEl && data.gamePhase) {
-        const phaseNames = { 'waiting': 'Aguardando apostas', 'rolling': 'Girando!', 'complete': 'Resultado' };
-        phaseEl.textContent = phaseNames[data.gamePhase] || data.gamePhase;
+    if (cycleEl && data.cycleTime) {
+        cycleEl.textContent = `${data.cycleTime}s`;
     }
 }
 
