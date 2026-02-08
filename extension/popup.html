@@ -7,60 +7,87 @@
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <!-- Tela de Login -->
+    <!-- ========== Tela de Login ========== -->
     <div id="view-login" class="view">
         <div class="logo-area">
             <div class="logo">B</div>
             <h1>BotBlaze</h1>
+            <p class="subtitle">Apostas Automaticas para Blaze Double</p>
         </div>
+
         <div id="login-error" class="error-msg" style="display:none;"></div>
+
         <div class="form-group">
-            <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+            <label>Email</label>
+            <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
         </div>
         <div class="form-group">
-            <input type="password" id="login-password" placeholder="Senha" autocomplete="current-password">
+            <label>Senha</label>
+            <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password">
         </div>
+
         <button class="btn btn-primary" id="btn-login">Entrar</button>
-        <div class="form-group" style="margin-top: 12px;">
-            <label class="label-small">URL da API</label>
+
+        <div class="form-group" style="margin-top: 14px;">
+            <label class="label-small">URL da API (opcional)</label>
             <input type="text" id="api-url" placeholder="http://localhost/api" class="input-small">
         </div>
     </div>
 
-    <!-- Tela Principal -->
+    <!-- ========== Tela Sem Assinatura ========== -->
+    <div id="view-no-sub" class="view" style="display:none;">
+        <div class="header-bar">
+            <span class="brand">BotBlaze</span>
+            <button class="btn-icon" id="btn-logout-nosub" title="Sair">&#x2715;</button>
+        </div>
+
+        <div class="no-sub-area">
+            <div class="no-sub-icon">&#128274;</div>
+            <h2>Assinatura Necessaria</h2>
+            <p>Voce precisa de um plano ativo para usar o BotBlaze.</p>
+            <p>Assine agora e comece a automatizar suas apostas.</p>
+            <button class="btn btn-primary" id="btn-subscribe">Assinar Agora</button>
+            <button class="btn btn-secondary" id="btn-retry-sub">Verificar Novamente</button>
+        </div>
+    </div>
+
+    <!-- ========== Tela Principal (logado + assinatura ativa) ========== -->
     <div id="view-main" class="view" style="display:none;">
         <div class="header-bar">
             <span class="brand">BotBlaze</span>
             <button class="btn-icon" id="btn-logout" title="Sair">&#x2715;</button>
         </div>
 
+        <!-- Info do usuario -->
         <div class="user-info">
             <span id="user-name">Usuario</span>
-            <span id="sub-status" class="badge badge-red">Sem plano</span>
+            <span id="sub-status" class="badge badge-green">Ativo</span>
         </div>
 
+        <!-- Estatisticas da sessao -->
         <div class="stats-grid">
             <div class="stat-card">
                 <span class="stat-value" id="stat-profit">R$ 0.00</span>
-                <span class="stat-label">Lucro</span>
+                <span class="stat-label">Lucro Sessao</span>
             </div>
             <div class="stat-card">
                 <span class="stat-value" id="stat-bets">0</span>
                 <span class="stat-label">Apostas</span>
             </div>
             <div class="stat-card">
-                <span class="stat-value" id="stat-wins">0</span>
+                <span class="stat-value stat-green" id="stat-wins">0</span>
                 <span class="stat-label">Wins</span>
             </div>
             <div class="stat-card">
-                <span class="stat-value" id="stat-losses">0</span>
+                <span class="stat-value stat-red" id="stat-losses">0</span>
                 <span class="stat-label">Losses</span>
             </div>
         </div>
 
+        <!-- Toggle do Bot -->
         <div class="section">
             <div class="row-between">
-                <span>Bot Automatico</span>
+                <span class="section-title">Bot Automatico</span>
                 <label class="switch">
                     <input type="checkbox" id="toggle-bot">
                     <span class="slider"></span>
@@ -68,42 +95,72 @@
             </div>
         </div>
 
+        <!-- Configuracoes -->
         <div class="section">
-            <h3>Configuracoes Rapidas</h3>
+            <h3>Configuracoes</h3>
+
             <div class="form-group">
-                <label>Valor Aposta (R$)</label>
-                <input type="number" id="cfg-bet-amount" min="0.10" max="1000" step="0.10" value="2.00">
+                <label>Valor da Aposta (R$)</label>
+                <input type="number" id="cfg-bet-amount" min="0.10" max="10000" step="0.10" value="2.00">
             </div>
+
             <div class="form-group">
                 <label>Estrategia</label>
                 <select id="cfg-strategy">
-                    <option value="color_frequency">Frequencia de Cor</option>
+                    <option value="frequency">Frequencia de Cor</option>
                     <option value="martingale">Martingale</option>
-                    <option value="pattern">Padrao Sequencia</option>
-                    <option value="manual">Manual</option>
+                    <option value="pattern">Padrao / Sequencia</option>
                 </select>
             </div>
-            <div class="row-between">
-                <span>Martingale</span>
-                <label class="switch">
-                    <input type="checkbox" id="cfg-martingale">
-                    <span class="slider"></span>
-                </label>
+
+            <div class="subsection">
+                <div class="row-between">
+                    <span>Martingale</span>
+                    <label class="switch">
+                        <input type="checkbox" id="cfg-martingale">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div id="martingale-options" class="martingale-opts" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group form-half">
+                            <label>Niveis Max</label>
+                            <input type="number" id="cfg-mg-max" min="1" max="10" step="1" value="3">
+                        </div>
+                        <div class="form-group form-half">
+                            <label>Multiplicador</label>
+                            <input type="number" id="cfg-mg-mult" min="1.1" max="5" step="0.1" value="2.0">
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <div class="form-row">
+                <div class="form-group form-half">
+                    <label>Stop Loss (R$)</label>
+                    <input type="number" id="cfg-stop-loss" min="1" max="100000" step="1" value="50">
+                </div>
+                <div class="form-group form-half">
+                    <label>Stop Gain (R$)</label>
+                    <input type="number" id="cfg-stop-gain" min="1" max="100000" step="1" value="50">
+                </div>
+            </div>
+
             <div class="form-group">
-                <label>Stop Loss (R$)</label>
-                <input type="number" id="cfg-stop-loss" min="1" max="10000" step="1" value="50">
+                <label>Max Apostas por Dia</label>
+                <input type="number" id="cfg-max-bets" min="1" max="10000" step="1" value="100">
             </div>
-            <div class="form-group">
-                <label>Stop Gain (R$)</label>
-                <input type="number" id="cfg-stop-gain" min="1" max="10000" step="1" value="100">
-            </div>
-            <button class="btn btn-primary" id="btn-save-settings">Salvar</button>
+
+            <button class="btn btn-primary" id="btn-save-settings">Salvar Configuracoes</button>
             <span id="save-msg" class="save-msg" style="display:none;">Salvo!</span>
         </div>
 
+        <!-- Footer -->
         <div class="footer-info">
-            <a href="#" id="link-dashboard">Abrir Dashboard</a>
+            <a href="#" id="link-history">Ver Historico de Apostas</a>
+            <span class="separator">|</span>
+            <a href="#" id="link-dashboard">Dashboard</a>
         </div>
     </div>
 

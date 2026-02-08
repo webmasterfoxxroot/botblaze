@@ -1,166 +1,232 @@
-/* BotBlaze - Overlay CSS (injected via content_scripts on blaze.bet.br) */
+/* ============================================================
+   BotBlaze - Overlay CSS
+   Estilos do painel flutuante injetado na pagina da Blaze.
+   Tema escuro compativel com o visual da Blaze.
+   ============================================================ */
+
+/* ---------- Container principal ---------- */
 
 #botblaze-overlay {
     position: fixed;
-    top: 80px;
+    top: 16px;
     right: 16px;
-    width: 260px;
-    background: #1a1a2e;
-    border: 1px solid #e63946;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     z-index: 999999;
-    font-family: 'Segoe UI', Arial, sans-serif;
+    width: 260px;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
     font-size: 13px;
     color: #e0e0e0;
+    background: rgba(18, 18, 36, 0.96);
+    border: 1px solid rgba(230, 57, 70, 0.4);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 12px rgba(230, 57, 70, 0.15);
     overflow: hidden;
     user-select: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: box-shadow 0.3s ease;
 }
 
-/* Header */
-.bb-header {
+#botblaze-overlay:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 20px rgba(230, 57, 70, 0.25);
+}
+
+/* ---------- Header ---------- */
+
+#botblaze-overlay .bb-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: linear-gradient(135deg, #e63946, #b02a37);
-    cursor: move;
+    background: linear-gradient(135deg, #e63946 0%, #b02a37 100%);
+    cursor: grab;
 }
 
-.bb-logo {
+#botblaze-overlay .bb-header:active {
+    cursor: grabbing;
+}
+
+#botblaze-overlay .bb-logo {
+    font-size: 15px;
     font-weight: 700;
-    font-size: 14px;
     color: #fff;
     letter-spacing: 0.5px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.bb-toggle-area {
+#botblaze-overlay .bb-header-controls,
+#botblaze-overlay .bb-toggle-area {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
-.bb-minimize {
-    background: none;
-    border: 1px solid rgba(255,255,255,0.3);
+/* ---------- Minimize Button ---------- */
+
+#botblaze-overlay .bb-minimize-btn,
+#botblaze-overlay .bb-minimize {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: #fff;
-    width: 22px;
-    height: 22px;
+    font-size: 14px;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    line-height: 20px;
+    text-align: center;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
+    transition: all 0.2s ease;
 }
 
-.bb-minimize:hover {
-    background: rgba(255,255,255,0.15);
+#botblaze-overlay .bb-minimize-btn:hover,
+#botblaze-overlay .bb-minimize:hover {
+    background: rgba(255, 255, 255, 0.25);
 }
 
-/* Toggle switch */
-.bb-switch {
+/* ---------- Toggle Switch ---------- */
+
+#botblaze-overlay .bb-switch {
     position: relative;
     display: inline-block;
-    width: 36px;
+    width: 40px;
     height: 20px;
+    flex-shrink: 0;
 }
 
-.bb-switch input {
+#botblaze-overlay .bb-switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.bb-slider {
+#botblaze-overlay .bb-slider {
     position: absolute;
     cursor: pointer;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: #444;
+    background-color: rgba(255, 255, 255, 0.2);
     border-radius: 20px;
     transition: 0.3s;
 }
 
-.bb-slider::before {
-    content: '';
+#botblaze-overlay .bb-slider::before {
     position: absolute;
-    height: 14px;
-    width: 14px;
-    left: 3px;
-    bottom: 3px;
-    background: #fff;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #fff;
     border-radius: 50%;
     transition: 0.3s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.bb-switch input:checked + .bb-slider {
-    background: #2ecc71;
+#botblaze-overlay .bb-switch input:checked + .bb-slider {
+    background-color: #2ecc71;
+    box-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
 }
 
-.bb-switch input:checked + .bb-slider::before {
-    transform: translateX(16px);
+#botblaze-overlay .bb-switch input:checked + .bb-slider::before {
+    transform: translateX(20px);
 }
 
-.bb-switch input:disabled + .bb-slider {
+#botblaze-overlay .bb-switch input:disabled + .bb-slider {
     opacity: 0.4;
     cursor: not-allowed;
 }
 
-/* Body */
-.bb-body {
-    padding: 12px 14px;
+/* ---------- Body ---------- */
+
+#botblaze-overlay .bb-body {
+    padding: 10px 14px 14px;
 }
 
-.bb-msg {
-    text-align: center;
-    color: #aaa;
-    font-size: 12px;
-    margin: 8px 0;
-    line-height: 1.4;
-}
+/* ---------- Stat Rows ---------- */
 
-/* Stats */
-.bb-stat-row {
+#botblaze-overlay .bb-stat-row {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     padding: 5px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.bb-stat-row:last-child {
+#botblaze-overlay .bb-stat-row:last-child {
     border-bottom: none;
 }
 
-.bb-stat-row span:first-child {
+#botblaze-overlay .bb-stat-label,
+#botblaze-overlay .bb-stat-row span:first-child {
     color: #999;
     font-size: 12px;
+    font-weight: 400;
 }
 
-.bb-stat-row span:last-child {
+#botblaze-overlay .bb-stat-row span:last-child {
     font-weight: 600;
     font-size: 13px;
 }
 
-/* Status colors */
-.bb-on {
+/* ---------- Status Colors ---------- */
+
+#botblaze-overlay .bb-on {
     color: #2ecc71;
     font-weight: 700;
+    text-shadow: 0 0 6px rgba(46, 204, 113, 0.4);
 }
 
-.bb-off {
+#botblaze-overlay .bb-off {
     color: #e74c3c;
     font-weight: 700;
 }
 
-.bb-green {
+#botblaze-overlay .bb-green {
     color: #2ecc71;
+    font-weight: 700;
 }
 
-.bb-red {
+#botblaze-overlay .bb-red {
     color: #e74c3c;
+    font-weight: 700;
+}
+
+/* ---------- Message (login/subscription) ---------- */
+
+#botblaze-overlay .bb-msg {
+    color: #aaa;
+    font-size: 12px;
+    text-align: center;
+    padding: 12px 4px;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ---------- Responsiveness ---------- */
+
+@media (max-width: 480px) {
+    #botblaze-overlay {
+        width: 220px;
+        font-size: 12px;
+        top: 8px;
+        right: 8px;
+    }
+
+    #botblaze-overlay .bb-header {
+        padding: 8px 10px;
+    }
+
+    #botblaze-overlay .bb-body {
+        padding: 8px 10px 10px;
+    }
+
+    #botblaze-overlay .bb-logo {
+        font-size: 13px;
+    }
 }
