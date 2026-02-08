@@ -13,23 +13,30 @@ class BotBlaze {
         this.collector = null;
         this.analyzer = null;
         this.signals = null;
+        this.liveConfig = {};
+        this.settingsTimer = null;
     }
 
     async start() {
         console.log('=================================');
-        console.log('  BotBlaze Engine v2.1');
+        console.log('  BotBlaze Engine v3.0');
         console.log('  Double Game - Tempo Real');
-        console.log('  Polling: 3s | Confianca: 55%+');
+        console.log('  Config via Painel Admin');
         console.log('=================================\n');
 
         await this.connectDB();
         await this.migrateDB();
 
+        // Carrega configuracoes do banco (admin ajusta em tempo real)
+        await this.loadSettings();
+
         const config = {
             apiUrl: process.env.BLAZE_API_URL || 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1',
-            analysisWindow: parseInt(process.env.ANALYSIS_WINDOW) || 50,
-            signalConfidenceMin: parseInt(process.env.SIGNAL_CONFIDENCE_MIN) || 55
+            analysisWindow: this.getSetting('analysis_window', 50),
+            signalConfidenceMin: this.getSetting('confidence_min', 55)
         };
+
+        console.log(`[Config] Intervalo: ${this.getSetting('collect_interval', 3000)}ms | Confianca: ${config.signalConfidenceMin}% | Janela: ${config.analysisWindow}`);
 
         this.collector = new DoubleCollector(this.db, config);
         this.analyzer = new DoubleAnalyzer(this.db, config);
@@ -48,6 +55,12 @@ class BotBlaze {
 
                 // 1. Verifica sinais pendentes (marca WIN/LOSS do sinal anterior)
                 await this.signals.verifyLastSignals();
+
+                // Checa se geracao de sinais esta ativa
+                if (this.getSetting('signals_active', 1) === 0 || this.getSetting('bot_status', 'running') === 'paused') {
+                    console.log('[Bot] Sinais pausados pelo admin');
+                    return;
+                }
 
                 // 2. Analisa e gera sinal pro PROXIMO jogo
                 const analysis = await this.analyzer.analyze();
@@ -75,13 +88,85 @@ class BotBlaze {
             }
         };
 
-        // Inicia monitoramento da API (polling a cada 5s)
-        this.collector.start();
+        // Inicia monitoramento com intervalo do banco
+        this.startCollector();
 
         // Verificacao backup a cada 10s (caso o evento nao pegue)
         setInterval(() => this.runVerification(), 10000);
 
+        // Recarrega configuracoes do banco a cada 10s (admin pode ter mudado)
+        this.settingsTimer = setInterval(() => this.reloadSettings(), 10000);
+
         console.log('[Bot] Aguardando jogos...\n');
+    }
+
+    // Carrega configs do banco de dados
+    async loadSettings() {
+        try {
+            const [rows] = await this.db.execute('SELECT setting_key, setting_value FROM bot_settings');
+            this.liveConfig = {};
+            for (const row of rows) {
+                this.liveConfig[row.setting_key] = row.setting_value;
+            }
+        } catch (err) {
+            // Tabela pode nao existir ainda
+            console.log('[Config] Usando defaults (tabela bot_settings nao encontrada)');
+        }
+    }
+
+    // Recarrega e aplica mudancas do admin
+    async reloadSettings() {
+        const oldInterval = this.getSetting('collect_interval', 3000);
+        const oldConfidence = this.getSetting('confidence_min', 55);
+        const oldAnalysisWindow = this.getSetting('analysis_window', 50);
+        const oldHistoryLimit = this.getSetting('history_limit', 2000);
+
+        await this.loadSettings();
+
+        const newInterval = this.getSetting('collect_interval', 3000);
+        const newConfidence = this.getSetting('confidence_min', 55);
+        const newAnalysisWindow = this.getSetting('analysis_window', 50);
+        const newHistoryLimit = this.getSetting('history_limit', 2000);
+
+        // Intervalo de coleta mudou? Reinicia o collector
+        if (newInterval !== oldInterval) {
+            console.log(`[Config] Intervalo alterado: ${oldInterval}ms -> ${newInterval}ms`);
+            this.collector.stop();
+            this.collector.pollInterval = newInterval;
+            this.startCollector();
+        }
+
+        // Confianca mudou? Atualiza analyzer e signals
+        if (newConfidence !== oldConfidence) {
+            console.log(`[Config] Confianca alterada: ${oldConfidence}% -> ${newConfidence}%`);
+            this.analyzer.minConfidence = newConfidence;
+            this.signals.minConfidence = newConfidence;
+        }
+
+        // Janela de analise mudou?
+        if (newAnalysisWindow !== oldAnalysisWindow) {
+            console.log(`[Config] Janela analise: ${oldAnalysisWindow} -> ${newAnalysisWindow}`);
+        }
+
+        // Limite de historico mudou?
+        if (newHistoryLimit !== oldHistoryLimit) {
+            console.log(`[Config] Limite historico: ${oldHistoryLimit} -> ${newHistoryLimit}`);
+        }
+    }
+
+    getSetting(key, defaultVal) {
+        const val = this.liveConfig[key];
+        if (val === undefined || val === null) return defaultVal;
+        if (typeof defaultVal === 'number') return parseInt(val) || defaultVal;
+        return val;
+    }
+
+    startCollector() {
+        const interval = this.getSetting('collect_interval', 3000);
+        this.collector.stop();
+        console.log(`[Collector] Monitorando API a cada ${interval}ms...`);
+        this.collector.collect();
+        this.collector.timer = setInterval(() => this.collector.collect(), interval);
     }
 
     async connectDB() {
@@ -116,6 +201,37 @@ class BotBlaze {
                 console.log('[DB] Coluna ref_game_db_id adicionada');
             }
         } catch (err) { }
+
+        // Cria tabela de configuracoes se nao existir
+        try {
+            await this.db.execute(`
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    setting_key VARCHAR(50) PRIMARY KEY,
+                    setting_value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB
+            `);
+
+            // Insere defaults se tabela vazia
+            const [count] = await this.db.execute('SELECT COUNT(*) as c FROM bot_settings');
+            if (count[0].c === 0) {
+                const defaults = [
+                    ['collect_interval', '3000'], ['confidence_min', '55'],
+                    ['strategy_sequences', '1'], ['strategy_frequency', '1'],
+                    ['strategy_martingale', '1'], ['strategy_ml_patterns', '1'],
+                    ['signals_active', '1'], ['max_signals_per_round', '4'],
+                    ['analysis_window', '50'], ['history_limit', '2000'],
+                    ['time_offset', '0'], ['bot_status', 'running']
+                ];
+                for (const [k, v] of defaults) {
+                    await this.db.execute(
+                        'INSERT IGNORE INTO bot_settings (setting_key, setting_value) VALUES (?, ?)', [k, v]
+                    );
+                }
+                console.log('[DB] Configuracoes padrao criadas');
+            }
+        } catch (err) { }
+
         console.log('[DB] Schema OK\n');
     }
 

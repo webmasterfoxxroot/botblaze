@@ -107,3 +107,26 @@ INSERT INTO plans (name, slug, duration_days, price) VALUES
 -- Admin padrao (senha: admin123)
 INSERT INTO users (name, email, password, role) VALUES
 ('Admin', 'admin@botblaze.com', '$2y$12$LCm1x1nK/OrMVVGWadD4IO/e1AkNugSUrvoYVZbQNP4t299.odYPu', 'admin');
+
+-- Configuracoes do bot (admin ajusta em tempo real)
+CREATE TABLE IF NOT EXISTS bot_settings (
+    setting_key VARCHAR(50) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Defaults
+INSERT INTO bot_settings (setting_key, setting_value) VALUES
+('collect_interval', '3000'),
+('confidence_min', '55'),
+('strategy_sequences', '1'),
+('strategy_frequency', '1'),
+('strategy_martingale', '1'),
+('strategy_ml_patterns', '1'),
+('signals_active', '1'),
+('max_signals_per_round', '4'),
+('analysis_window', '50'),
+('history_limit', '2000'),
+('time_offset', '0'),
+('bot_status', 'running')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
