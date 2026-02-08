@@ -83,30 +83,54 @@
         window.location.href = '/login.html';
     });
 
-    // Admin uses a dedicated endpoint (or we can extend auth.php)
-    // For now, fetch basic stats from existing endpoints
     async function loadAdmin() {
-        // We'll add a proper admin API later
-        // For now just show a placeholder
         try {
-            const res = await fetch(API_URL + '/auth.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
-                body: JSON.stringify({ action: 'validate' })
+            const res = await fetch(API_URL + '/admin.php', {
+                headers: { 'Authorization': 'Bearer ' + token }
             });
             const data = await res.json();
-            if (!data.user || data.user.role !== 'admin') {
+
+            if (data.error) {
                 window.location.href = '/login.html';
+                return;
+            }
+
+            // Stats
+            const s = data.stats;
+            document.getElementById('s-users').textContent = s.total_users;
+            document.getElementById('s-subs').textContent = s.active_subs;
+            document.getElementById('s-revenue').textContent = 'R$ ' + parseFloat(s.revenue).toFixed(2).replace('.', ',');
+            document.getElementById('s-bets').textContent = s.today_bets;
+
+            // Users table
+            const tbody = document.getElementById('users-table');
+            if (data.users && data.users.length > 0) {
+                tbody.innerHTML = data.users.map(u => {
+                    const statusClass = u.status === 'active' ? 'badge-green' : 'badge-red';
+                    const statusText = u.status === 'active' ? 'Ativo' : 'Bloqueado';
+                    const plan = u.plan_name || 'Sem plano';
+                    const expires = u.expires_at ? new Date(u.expires_at).toLocaleDateString('pt-BR') : '-';
+                    const created = new Date(u.created_at).toLocaleDateString('pt-BR');
+                    return `<tr>
+                        <td>${u.id}</td>
+                        <td>${u.name}</td>
+                        <td>${u.email}</td>
+                        <td><span class="badge ${statusClass}">${statusText}</span></td>
+                        <td>${plan}</td>
+                        <td>${expires}</td>
+                        <td>${created}</td>
+                    </tr>`;
+                }).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">Nenhum usuario</td></tr>';
             }
         } catch (err) {
-            console.error(err);
+            console.error('Erro ao carregar admin:', err);
         }
     }
 
     loadAdmin();
+    setInterval(loadAdmin, 30000);
     </script>
 </body>
 </html>
