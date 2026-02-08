@@ -88,9 +88,9 @@
                 return;
             }
 
-            localStorage.setItem('botblaze_token', data.token);
+            localStorage.setItem('botblaze_token', data.api_token || data.token);
             localStorage.setItem('botblaze_user', JSON.stringify(data.user));
-            window.location.href = '/web/dashboard.html';
+            window.location.href = '/dashboard.html';
         } catch (err) {
             errorMsg.textContent = 'Erro de conexao. Tente novamente.';
             errorMsg.style.display = 'block';

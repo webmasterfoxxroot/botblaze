@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const store = await chrome.storage.local.get(['api_url']);
         const apiUrl = store.api_url || 'http://localhost/api';
         const baseUrl = apiUrl.replace('/api', '');
-        chrome.tabs.create({ url: baseUrl + '/web/pricing.html' });
+        chrome.tabs.create({ url: baseUrl + '/index.html#plans' });
     });
 
     // === VERIFICAR NOVAMENTE (tela sem assinatura) ===
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const store = await chrome.storage.local.get(['api_url']);
         const apiUrl = store.api_url || 'http://localhost/api';
         const baseUrl = apiUrl.replace('/api', '');
-        chrome.tabs.create({ url: baseUrl + '/web/history.html' });
+        chrome.tabs.create({ url: baseUrl + '/dashboard.html' });
     });
 
     document.getElementById('link-dashboard').addEventListener('click', async (e) => {
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const store = await chrome.storage.local.get(['api_url']);
         const apiUrl = store.api_url || 'http://localhost/api';
         const baseUrl = apiUrl.replace('/api', '');
-        chrome.tabs.create({ url: baseUrl + '/web/dashboard.html' });
+        chrome.tabs.create({ url: baseUrl + '/dashboard.html' });
     });
 
     // ===================== HELPERS =====================

@@ -87,8 +87,8 @@ ON DUPLICATE KEY UPDATE name = name;
 
 -- Admin padrao (senha: admin123)
 INSERT INTO users (name, email, password, role) VALUES
-('Admin', 'admin@botblaze.com', '$2y$12$v5jLp..8gGyVUCsvF8.jsOydGDF5Txo2CBRg1W8YKrcsf4Y4krUFe', 'admin')
-ON DUPLICATE KEY UPDATE email = email;
+('Admin', 'admin@botblaze.com', '$2y$12$trTJx4/pTgKqgC3IF5Dp8.Epu4CBoZCMm7qXg5LSDfvtqVVYQtJz2', 'admin')
+ON DUPLICATE KEY UPDATE password = '$2y$12$trTJx4/pTgKqgC3IF5Dp8.Epu4CBoZCMm7qXg5LSDfvtqVVYQtJz2';
 
 -- Assinatura do admin (365 dias)
 INSERT INTO subscriptions (user_id, plan_id, status, expires_at)
