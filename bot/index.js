@@ -17,8 +17,9 @@ class BotBlaze {
 
     async start() {
         console.log('=================================');
-        console.log('  BotBlaze Engine v2.0');
+        console.log('  BotBlaze Engine v2.1');
         console.log('  Double Game - Tempo Real');
+        console.log('  Polling: 3s | Confianca: 55%+');
         console.log('=================================\n');
 
         await this.connectDB();
@@ -27,7 +28,7 @@ class BotBlaze {
         const config = {
             apiUrl: process.env.BLAZE_API_URL || 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1',
             analysisWindow: parseInt(process.env.ANALYSIS_WINDOW) || 50,
-            signalConfidenceMin: parseInt(process.env.SIGNAL_CONFIDENCE_MIN) || 65
+            signalConfidenceMin: parseInt(process.env.SIGNAL_CONFIDENCE_MIN) || 55
         };
 
         this.collector = new DoubleCollector(this.db, config);

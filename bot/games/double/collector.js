@@ -7,20 +7,28 @@ class DoubleCollector {
         this.timer = null;
         this.lastGameId = null;
         this.onNewGame = null; // callback quando detecta jogo novo
+        this.collecting = false; // evita coletas sobrepostas
     }
 
     async fetchRecent() {
         try {
-            const response = await axios.get(this.apiUrl, {
-                timeout: 8000,
+            // Cache-busting: adiciona timestamp para evitar cache da API
+            const separator = this.apiUrl.includes('?') ? '&' : '?';
+            const url = `${this.apiUrl}${separator}_t=${Date.now()}`;
+
+            const response = await axios.get(url, {
+                timeout: 5000, // 5s timeout (era 8s)
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Accept': 'application/json',
-                    'Referer': 'https://blaze.bet.br/'
+                    'Referer': 'https://blaze.bet.br/',
+                    'Cache-Control': 'no-cache, no-store',
+                    'Pragma': 'no-cache'
                 }
             });
             return response.data || [];
         } catch (error) {
+            console.error('[Collector] Erro fetch:', error.message);
             return [];
         }
     }
@@ -61,46 +69,75 @@ class DoubleCollector {
     }
 
     async collect() {
-        const games = await this.fetchRecent();
-        if (!games.length) return false;
+        // Evita coletas sobrepostas
+        if (this.collecting) return false;
+        this.collecting = true;
 
-        const newestId = games[0]?.id;
+        try {
+            const fetchStart = Date.now();
+            const games = await this.fetchRecent();
+            const fetchTime = Date.now() - fetchStart;
 
-        // Primeira execucao: salva tudo e memoriza
-        if (this.lastGameId === null) {
+            if (!games.length) {
+                this.collecting = false;
+                return false;
+            }
+
+            const newestId = games[0]?.id;
+
+            // Primeira execucao: salva tudo e memoriza
+            if (this.lastGameId === null) {
+                this.lastGameId = newestId;
+                const saved = await this.saveGames(games);
+                const total = await this.getTotalGames();
+                console.log(`[Collector] Inicial: Salvou ${saved} | Total: ${total} | API: ${fetchTime}ms`);
+                this.collecting = false;
+                return saved > 0;
+            }
+
+            // Sem jogo novo
+            if (newestId === this.lastGameId) {
+                this.collecting = false;
+                return false;
+            }
+
+            // JOGO NOVO DETECTADO!
+            const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
+            const newest = games[0];
+
+            // Calcula atraso: quanto tempo entre o jogo ter sido criado e nos detectarmos
+            const gameTime = new Date(newest.created_at).getTime();
+            const delay = ((Date.now() - gameTime) / 1000).toFixed(1);
+
+            console.log(`\n[NOVO JOGO] Roll ${newest.roll} = ${colorNames[newest.color]} (ID: ${newestId})`);
+            console.log(`[Timing] API: ${fetchTime}ms | Atraso desde jogo: ${delay}s`);
+
             this.lastGameId = newestId;
             const saved = await this.saveGames(games);
             const total = await this.getTotalGames();
-            console.log(`[Collector] Inicial: Salvou ${saved} | Total: ${total}`);
-            return saved > 0;
+            console.log(`[Collector] Salvou ${saved} novos | Total: ${total}`);
+
+            // Dispara callback IMEDIATAMENTE
+            if (this.onNewGame) {
+                const callbackStart = Date.now();
+                await this.onNewGame(newest);
+                console.log(`[Timing] Callback completo em ${Date.now() - callbackStart}ms`);
+            }
+
+            this.collecting = false;
+            return true;
+        } catch (err) {
+            console.error('[Collector] Erro collect:', err.message);
+            this.collecting = false;
+            return false;
         }
-
-        // Sem jogo novo
-        if (newestId === this.lastGameId) return false;
-
-        // JOGO NOVO DETECTADO!
-        const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
-        const newest = games[0];
-        console.log(`\n[NOVO JOGO] Roll ${newest.roll} = ${colorNames[newest.color]} (ID: ${newestId})`);
-
-        this.lastGameId = newestId;
-        const saved = await this.saveGames(games);
-        const total = await this.getTotalGames();
-        console.log(`[Collector] Salvou ${saved} novos | Total: ${total}`);
-
-        // Dispara callback IMEDIATAMENTE
-        if (this.onNewGame) {
-            await this.onNewGame(newest);
-        }
-
-        return true;
     }
 
     start() {
-        // Polling rapido: checa a cada 5 segundos se tem jogo novo
-        console.log('[Collector] Monitorando API a cada 5s...');
+        // Polling RAPIDO: checa a cada 3 segundos se tem jogo novo
+        console.log('[Collector] Monitorando API a cada 3s...');
         this.collect();
-        this.timer = setInterval(() => this.collect(), 5000);
+        this.timer = setInterval(() => this.collect(), 3000);
     }
 
     stop() {

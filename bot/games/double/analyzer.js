@@ -6,7 +6,7 @@ const MLPatternsStrategy = require('../../strategies/ml-patterns');
 class DoubleAnalyzer {
     constructor(db, config) {
         this.db = db;
-        this.minConfidence = config.signalConfidenceMin || 65;
+        this.minConfidence = config.signalConfidenceMin || 55;
 
         this.strategies = [
             new SequenceStrategy(),
@@ -17,19 +17,23 @@ class DoubleAnalyzer {
     }
 
     async analyze() {
-        // Ultimas 50 rodadas para analise
+        const start = Date.now();
+
+        // Ultimas 50 rodadas para analise rapida
         const [recent50] = await this.db.execute(
             'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 50'
         );
 
-        if (recent50.length < 20) {
+        if (recent50.length < 10) {
             return null;
         }
 
-        // Historico completo pra ML e estatisticas (ate 10000)
+        // Historico para ML e estatisticas (2000 ao inves de 10000 - mais rapido)
         const [allHistory] = await this.db.execute(
-            'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 10000'
+            'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 2000'
         );
+
+        const queryTime = Date.now() - start;
 
         const allPredictions = [];
 
@@ -48,6 +52,9 @@ class DoubleAnalyzer {
                 console.error(`[Analyzer] Erro ${strategy.name}:`, err.message);
             }
         }
+
+        const totalTime = Date.now() - start;
+        console.log(`[Analyzer] ${allPredictions.length} previsoes | Query: ${queryTime}ms | Total: ${totalTime}ms`);
 
         return {
             timestamp: new Date(),
