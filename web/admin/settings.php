@@ -32,10 +32,10 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="panel-body">
                     <div class="setting-item">
                         <div class="setting-label">
-                            <span>Intervalo de Coleta (ms)</span>
-                            <span class="setting-value" id="val-collect_interval">3000</span>
+                            <span>Intervalo de Coleta (segundos)</span>
+                            <span class="setting-value" id="val-collect_interval">3</span>
                         </div>
-                        <input type="range" class="setting-range" id="collect_interval" min="1000" max="15000" step="500" value="3000">
+                        <input type="range" class="setting-range" id="collect_interval" min="1" max="15" step="1" value="3">
                         <div class="setting-range-labels"><span>1s (rapido)</span><span>15s (lento)</span></div>
                         <p class="setting-hint">Quanto menor, mais rapido detecta jogos novos. Valores baixos consomem mais recursos.</p>
                     </div>
@@ -405,7 +405,7 @@ function applyToUI(s) {
         if (el && s[key] !== undefined) {
             el.value = s[key];
             if (val) {
-                if (key === 'collect_interval') val.textContent = (parseInt(s[key]) / 1000).toFixed(1) + 's';
+                if (key === 'collect_interval') val.textContent = s[key] + 's';
                 else if (key === 'time_offset') val.textContent = (parseInt(s[key]) >= 0 ? '+' : '') + s[key] + 's';
                 else val.textContent = s[key];
             }
@@ -473,7 +473,7 @@ function showSaveToast() {
         const val = el.value;
         const display = document.getElementById('val-' + key);
         if (display) {
-            if (key === 'collect_interval') display.textContent = (parseInt(val) / 1000).toFixed(1) + 's';
+            if (key === 'collect_interval') display.textContent = val + 's';
             else if (key === 'time_offset') display.textContent = (parseInt(val) >= 0 ? '+' : '') + val + 's';
             else display.textContent = val;
         }

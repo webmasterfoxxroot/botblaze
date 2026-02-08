@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS bot_settings (
 
 -- Defaults
 INSERT INTO bot_settings (setting_key, setting_value) VALUES
-('collect_interval', '3000'),
+('collect_interval', '3'),
 ('confidence_min', '55'),
 ('strategy_sequences', '1'),
 ('strategy_frequency', '1'),

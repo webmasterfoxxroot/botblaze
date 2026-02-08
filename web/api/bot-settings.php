@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     // Defaults para configs que nao existem
     $defaults = [
-        'collect_interval' => '3000',
+        'collect_interval' => '3',
         'confidence_min' => '55',
         'strategy_sequences' => '1',
         'strategy_frequency' => '1',
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
 
     $validations = [
-        'collect_interval' => ['min' => 1000, 'max' => 30000],
+        'collect_interval' => ['min' => 1, 'max' => 30],
         'confidence_min' => ['min' => 30, 'max' => 95],
         'max_signals_per_round' => ['min' => 1, 'max' => 10],
         'analysis_window' => ['min' => 10, 'max' => 200],

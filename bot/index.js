@@ -36,7 +36,7 @@ class BotBlaze {
             signalConfidenceMin: this.getSetting('confidence_min', 55)
         };
 
-        console.log(`[Config] Intervalo: ${this.getSetting('collect_interval', 3000)}ms | Confianca: ${config.signalConfidenceMin}% | Janela: ${config.analysisWindow}`);
+        console.log(`[Config] Intervalo: ${this.getSetting('collect_interval', 3)}s | Confianca: ${config.signalConfidenceMin}% | Janela: ${config.analysisWindow}`);
 
         this.collector = new DoubleCollector(this.db, config);
         this.analyzer = new DoubleAnalyzer(this.db, config);
@@ -116,21 +116,21 @@ class BotBlaze {
 
     // Recarrega e aplica mudancas do admin
     async reloadSettings() {
-        const oldInterval = this.getSetting('collect_interval', 3000);
+        const oldInterval = this.getSetting('collect_interval', 3);
         const oldConfidence = this.getSetting('confidence_min', 55);
         const oldAnalysisWindow = this.getSetting('analysis_window', 50);
         const oldHistoryLimit = this.getSetting('history_limit', 2000);
 
         await this.loadSettings();
 
-        const newInterval = this.getSetting('collect_interval', 3000);
+        const newInterval = this.getSetting('collect_interval', 3);
         const newConfidence = this.getSetting('confidence_min', 55);
         const newAnalysisWindow = this.getSetting('analysis_window', 50);
         const newHistoryLimit = this.getSetting('history_limit', 2000);
 
         // Intervalo de coleta mudou? Reinicia o collector
         if (newInterval !== oldInterval) {
-            console.log(`[Config] Intervalo alterado: ${oldInterval}ms -> ${newInterval}ms`);
+            console.log(`[Config] Intervalo alterado: ${oldInterval}s -> ${newInterval}s`);
             this.collector.stop();
             this.collector.pollInterval = newInterval;
             this.startCollector();
@@ -162,11 +162,12 @@ class BotBlaze {
     }
 
     startCollector() {
-        const interval = this.getSetting('collect_interval', 3000);
+        const seconds = this.getSetting('collect_interval', 3);
+        const intervalMs = seconds * 1000;
         this.collector.stop();
-        console.log(`[Collector] Monitorando API a cada ${interval}ms...`);
+        console.log(`[Collector] Monitorando API a cada ${seconds}s...`);
         this.collector.collect();
-        this.collector.timer = setInterval(() => this.collector.collect(), interval);
+        this.collector.timer = setInterval(() => this.collector.collect(), intervalMs);
     }
 
     async connectDB() {
@@ -216,7 +217,7 @@ class BotBlaze {
             const [count] = await this.db.execute('SELECT COUNT(*) as c FROM bot_settings');
             if (count[0].c === 0) {
                 const defaults = [
-                    ['collect_interval', '3000'], ['confidence_min', '55'],
+                    ['collect_interval', '3'], ['confidence_min', '55'],
                     ['strategy_sequences', '1'], ['strategy_frequency', '1'],
                     ['strategy_martingale', '1'], ['strategy_ml_patterns', '1'],
                     ['signals_active', '1'], ['max_signals_per_round', '4'],
