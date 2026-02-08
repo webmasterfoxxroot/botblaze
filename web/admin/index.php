@@ -106,6 +106,45 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
+    <!-- Performance por Estrategia -->
+    <?php
+    $strategyStats = $db->query("
+        SELECT strategy_used,
+            COUNT(*) as total,
+            SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses
+        FROM signals WHERE game_type = 'double'
+        GROUP BY strategy_used ORDER BY strategy_used
+    ")->fetchAll();
+    ?>
+    <div class="panel" style="margin-bottom:16px">
+        <div class="panel-header"><h2>Performance por Estrategia</h2></div>
+        <div class="panel-body">
+            <div class="stats-grid" id="strategy-stats">
+                <?php foreach ($strategyStats as $st):
+                    $d = $st['wins'] + $st['losses'];
+                    $wr = $d > 0 ? round(($st['wins'] / $d) * 100, 1) : 0;
+                    $wrClass = $wr >= 50 ? 'text-green' : 'text-red';
+                ?>
+                <div class="stat-card">
+                    <div class="stat-label" style="text-transform:capitalize;font-size:14px;margin-bottom:8px">
+                        <?= htmlspecialchars($st['strategy_used']) ?>
+                    </div>
+                    <div class="stat-value <?= $wrClass ?>"><?= $wr ?>%</div>
+                    <div class="stat-label">
+                        <span style="color:var(--green)"><?= $st['wins'] ?>W</span> /
+                        <span style="color:var(--red)"><?= $st['losses'] ?>L</span>
+                        (<?= $st['total'] ?> total)
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php if (empty($strategyStats)): ?>
+                    <p class="text-muted">Aguardando dados...</p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
     <div class="dashboard-grid">
         <!-- Ultimos Usuarios -->
         <div class="panel">
@@ -223,6 +262,25 @@ function refreshAdmin() {
                     </tr>`;
                 });
                 tbody.innerHTML = html;
+            }
+
+            // Atualiza stats por estrategia
+            const stratDiv = document.getElementById('strategy-stats');
+            if (stratDiv && data.strategies) {
+                let html = '';
+                data.strategies.forEach(st => {
+                    const wrClass = st.winRate >= 50 ? 'text-green' : 'text-red';
+                    html += `<div class="stat-card">
+                        <div class="stat-label" style="text-transform:capitalize;font-size:14px;margin-bottom:8px">${st.strategy}</div>
+                        <div class="stat-value ${wrClass}">${st.winRate}%</div>
+                        <div class="stat-label">
+                            <span style="color:var(--green)">${st.wins}W</span> /
+                            <span style="color:var(--red)">${st.losses}L</span>
+                            (${st.total} total)
+                        </div>
+                    </div>`;
+                });
+                stratDiv.innerHTML = html;
             }
         })
         .catch(e => console.error('Erro no refresh:', e));

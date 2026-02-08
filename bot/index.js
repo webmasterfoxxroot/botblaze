@@ -108,11 +108,12 @@ class BotBlaze {
             const analysis = await this.analyzer.analyze();
             if (!analysis) return;
 
-            // Tenta gerar sinal
-            const signal = await this.signals.generateSignal(analysis);
+            // Gera sinais separados por estrategia
+            const newSignals = await this.signals.generateSignals(analysis);
 
-            // Busca stats
+            // Busca stats gerais e por estrategia
             const stats = await this.signals.getStats();
+            const strategyStats = await this.signals.getStatsByStrategy();
 
             // Envia para dashboards conectados
             this.broadcast({
@@ -120,13 +121,13 @@ class BotBlaze {
                 data: {
                     lastGame: analysis.lastGame,
                     totalGames: analysis.totalGames,
-                    combined: analysis.combined,
-                    signal,
-                    stats
+                    signals: newSignals,
+                    stats,
+                    strategyStats
                 }
             });
 
-            if (signal) {
+            for (const signal of newSignals) {
                 this.broadcast({ type: 'signal', data: signal });
             }
         } catch (err) {
