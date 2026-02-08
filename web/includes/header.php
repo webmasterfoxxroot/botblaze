@@ -19,6 +19,7 @@
                 <a href="/admin/" class="nav-link">Admin</a>
                 <a href="/admin/users.php" class="nav-link">Usuarios</a>
                 <a href="/admin/plans.php" class="nav-link">Planos</a>
+                <a href="/admin/settings.php" class="nav-link">Config</a>
             <?php endif; ?>
             <a href="/dashboard.php" class="nav-link">Dashboard</a>
             <div class="nav-user">

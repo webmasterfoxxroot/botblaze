@@ -7,6 +7,19 @@ class DoubleSignals {
     async generateSignals(analysisResult) {
         if (!analysisResult || !analysisResult.allPredictions) return [];
 
+        // Carrega confianca minima e max sinais do banco
+        let minConf = this.minConfidence;
+        let maxSignals = 4;
+        try {
+            const [settings] = await this.db.execute(
+                "SELECT setting_key, setting_value FROM bot_settings WHERE setting_key IN ('confidence_min', 'max_signals_per_round')"
+            );
+            for (const r of settings) {
+                if (r.setting_key === 'confidence_min') minConf = parseInt(r.setting_value) || 55;
+                if (r.setting_key === 'max_signals_per_round') maxSignals = parseInt(r.setting_value) || 4;
+            }
+        } catch (e) {}
+
         // Pega o ID do ultimo jogo salvo (referencia para verificacao)
         const [lastGameRow] = await this.db.execute(
             'SELECT id FROM game_history_double ORDER BY id DESC LIMIT 1'
@@ -16,7 +29,8 @@ class DoubleSignals {
         const signals = [];
 
         for (const prediction of analysisResult.allPredictions) {
-            if (prediction.confidence < this.minConfidence) continue;
+            if (prediction.confidence < minConf) continue;
+            if (signals.length >= maxSignals) break;
 
             // Evita duplicado: mesma estrategia + mesma cor nos ultimos 30s
             const [lastSignal] = await this.db.execute(
