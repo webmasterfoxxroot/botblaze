@@ -564,11 +564,6 @@ let rouletteState = 'waiting';
 let countdownTimer = null;
 let countdownSec = 0;
 
-function rollToColor(roll) {
-    if (roll === 0) return 0;
-    if (roll >= 1 && roll <= 7) return 1;
-    return 2;
-}
 function getCardClass(color) {
     return { 0: 'rc-white', 1: 'rc-red', 2: 'rc-black' }[parseInt(color)] || 'rc-black';
 }
@@ -578,11 +573,13 @@ function createCardHTML(game) {
     if (color === 0) return `<div class="roulette-card ${cls}"><div class="roulette-card-inner"><span class="rc-icon">&#10070;</span></div></div>`;
     return `<div class="roulette-card ${cls}"><div class="roulette-card-inner">${game.roll}</div></div>`;
 }
-function generateRandomCards(count) {
+// Gera cards aleatorios SOMENTE para animacao de spin (nao para exibicao estatica)
+function generateSpinCards(count) {
     const cards = [];
     for (let i = 0; i < count; i++) {
         const roll = Math.floor(Math.random() * 15);
-        cards.push({ roll, color: rollToColor(roll) });
+        const color = roll === 0 ? 0 : (roll <= 7 ? 1 : 2);
+        cards.push({ roll, color });
     }
     return cards;
 }
@@ -593,25 +590,24 @@ function initRoulette(games) {
     chrono.forEach(g => rouletteGames.push(g));
     renderRouletteStatic();
     setRouletteStatus('waiting');
+    // Atualiza GIROS ANTERIORES com dados reais
+    updateRouletteHistoryFull(games);
 }
 function renderRouletteStatic() {
     const track = document.getElementById('roulette-track');
     if (!track) return;
-    const recent = rouletteGames.slice(-8);
-    const vpWidth = track.parentElement ? track.parentElement.offsetWidth : 800;
+    const viewport = track.parentElement;
+    const vpWidth = viewport ? viewport.offsetWidth : 800;
     const cardWidth = window.innerWidth <= 768 ? 78 : 98;
-    const centerCards = Math.floor(vpWidth / cardWidth / 2);
-    const padBefore = generateRandomCards(centerCards);
-    const padAfter = generateRandomCards(centerCards + 2);
+    // Mostra TODOS os jogos reais no carousel (sem cards falsos)
     let html = '';
-    padBefore.forEach(g => html += createCardHTML(g));
-    recent.forEach(g => html += createCardHTML(g));
-    padAfter.forEach(g => html += createCardHTML(g));
+    rouletteGames.forEach(g => html += createCardHTML(g));
     track.classList.add('no-transition');
     track.innerHTML = html;
-    const totalBefore = padBefore.length + recent.length - 1;
-    const offset = totalBefore * cardWidth - vpWidth / 2 + cardWidth / 2;
-    track.style.transform = `translateX(-${offset}px)`;
+    // Posiciona para que o ULTIMO jogo (mais recente) fique no centro
+    const lastIndex = rouletteGames.length - 1;
+    const offset = lastIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
+    track.style.transform = `translateX(-${Math.max(0, offset)}px)`;
     requestAnimationFrame(() => track.classList.remove('no-transition'));
 }
 function spinRoulette(newGame) {
@@ -619,24 +615,23 @@ function spinRoulette(newGame) {
     setRouletteStatus('spinning');
     const track = document.getElementById('roulette-track');
     if (!track) return;
-    const vpWidth = track.parentElement ? track.parentElement.offsetWidth : 800;
+    const viewport = track.parentElement;
+    const vpWidth = viewport ? viewport.offsetWidth : 800;
     const cardWidth = window.innerWidth <= 768 ? 78 : 98;
-    const centerCards = Math.floor(vpWidth / cardWidth / 2);
-    const spinCards = generateRandomCards(30);
-    const padBefore = rouletteGames.slice(-3);
-    const padAfter = generateRandomCards(centerCards + 2);
+    // Ultimos jogos reais + cards aleatorios para animacao + resultado final
+    const realBefore = rouletteGames.slice(-5);
+    const spinCards = generateSpinCards(25);
     let html = '';
-    padBefore.forEach(g => html += createCardHTML(g));
+    realBefore.forEach(g => html += createCardHTML(g));
     spinCards.forEach(g => html += createCardHTML(g));
-    html += createCardHTML(newGame);
-    padAfter.forEach(g => html += createCardHTML(g));
+    html += createCardHTML(newGame); // O resultado REAL no final
     track.classList.add('no-transition');
     track.innerHTML = html;
     track.style.transform = `translateX(0px)`;
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             track.classList.remove('no-transition');
-            const targetIndex = padBefore.length + spinCards.length;
+            const targetIndex = realBefore.length + spinCards.length;
             const offset = targetIndex * cardWidth - vpWidth / 2 + cardWidth / 2;
             track.style.transform = `translateX(-${offset}px)`;
         });
@@ -646,7 +641,7 @@ function spinRoulette(newGame) {
         setRouletteStatus('result', `Blaze Girou ${newGame.roll}!`);
         rouletteGames.push(newGame);
         if (rouletteGames.length > 20) rouletteGames.shift();
-        updateRouletteHistory(newGame);
+        addToRouletteHistory(newGame);
         setTimeout(() => {
             rouletteState = 'waiting';
             setRouletteStatus('waiting');
@@ -677,7 +672,20 @@ function startCountdown() {
     }, 1000);
 }
 function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
-function updateRouletteHistory(newGame) {
+// Atualiza GIROS ANTERIORES inteiro com dados da API (mais recente primeiro)
+function updateRouletteHistoryFull(games) {
+    const dots = document.getElementById('roulette-history-dots');
+    if (!dots || !games) return;
+    let html = '';
+    games.forEach(g => {
+        const color = parseInt(g.color);
+        const cls = colorClasses[color] || 'white';
+        html += `<span class="rh-dot ${cls}" title="${g.roll}">${g.roll}</span>`;
+    });
+    dots.innerHTML = html;
+}
+// Adiciona UM novo jogo no inicio dos giros anteriores
+function addToRouletteHistory(newGame) {
     const dots = document.getElementById('roulette-history-dots');
     if (!dots) return;
     const cls = colorClasses[parseInt(newGame.color)] || 'white';
