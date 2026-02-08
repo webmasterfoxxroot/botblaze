@@ -9,13 +9,13 @@ class DoubleCollector {
         this.onNewGame = null;          // callback: jogo novo detectado
         this.onSyncUpdate = null;       // callback: envia estado completo pro frontend
         this.collecting = false;
-        this.pollInterval = 1;          // segundos
+        this.pollInterval = 2;          // segundos (padrao seguro)
 
         // Sincronizacao com a Blaze
         this.blazeGames = [];           // lista completa da API (espelho)
         this.cycleTime = 30;            // tempo medio entre jogos (calculado automaticamente)
-        this.lastGameTime = null;       // timestamp do ultimo jogo detectado
-        this.nextGameEstimate = null;   // quando o proximo jogo deve aparecer
+        this.lastGameDetectedAt = null; // NOSSO relogio: quando detectamos o ultimo jogo
+        this.nextGameEstimate = null;   // quando o proximo jogo deve aparecer (nosso relogio)
         this.cycleHistory = [];         // historico de ciclos para media movel
     }
 
@@ -42,6 +42,7 @@ class DoubleCollector {
     }
 
     // Calcula o ritmo da Blaze a partir dos timestamps dos jogos
+    // (usa timestamps da API entre si - mesmo servidor, sem problema de timezone)
     calculateCycleTime(games) {
         if (!games || games.length < 3) return;
 
@@ -49,7 +50,7 @@ class DoubleCollector {
         for (let i = 0; i < Math.min(games.length - 1, 10); i++) {
             const t1 = new Date(games[i].created_at).getTime();
             const t2 = new Date(games[i + 1].created_at).getTime();
-            const diff = (t1 - t2) / 1000; // segundos
+            const diff = (t1 - t2) / 1000; // segundos (mais recente - anterior = positivo)
             if (diff > 10 && diff < 120) {  // so aceita intervalos razoaveis
                 intervals.push(diff);
             }
@@ -57,17 +58,17 @@ class DoubleCollector {
 
         if (intervals.length === 0) return;
 
-        // Media dos intervalos = tempo do ciclo
         const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
         this.cycleTime = Math.round(avg);
 
-        console.log(`[Sync] Ciclo Blaze: ${this.cycleTime}s (calculado de ${intervals.length} intervalos: ${intervals.map(i => i.toFixed(0) + 's').join(', ')})`);
+        console.log(`[Sync] Ciclo Blaze: ${this.cycleTime}s (de ${intervals.length} intervalos: ${intervals.map(i => i.toFixed(0) + 's').join(', ')})`);
     }
 
-    // Estima quando o proximo jogo vai aparecer na API
+    // Estima quando o proximo jogo vai aparecer
+    // USA NOSSO RELOGIO LOCAL (nao o da Blaze) para evitar problemas de timezone
     estimateNextGame() {
-        if (!this.lastGameTime) return null;
-        this.nextGameEstimate = this.lastGameTime + (this.cycleTime * 1000);
+        if (!this.lastGameDetectedAt) return null;
+        this.nextGameEstimate = this.lastGameDetectedAt + (this.cycleTime * 1000);
         return this.nextGameEstimate;
     }
 
@@ -119,17 +120,15 @@ class DoubleCollector {
     // Monta o estado completo para enviar ao frontend
     buildSyncState(newGame) {
         return {
-            games: this.blazeGames,         // lista completa da API (espelho)
-            newGame: newGame || null,        // jogo novo (se acabou de detectar)
-            cycleTime: this.cycleTime,       // tempo do ciclo em segundos
-            lastGameTime: this.lastGameTime, // timestamp do ultimo jogo
-            nextGameEstimate: this.nextGameEstimate,
+            games: this.blazeGames,
+            newGame: newGame || null,
+            cycleTime: this.cycleTime,
             secondsToNext: this.getSecondsToNext(),
             timestamp: Date.now()
         };
     }
 
-    // Envia estado completo para o frontend
+    // Envia estado completo para o frontend via callback
     broadcastSync(newGame) {
         if (this.onSyncUpdate) {
             this.onSyncUpdate(this.buildSyncState(newGame));
@@ -159,7 +158,7 @@ class DoubleCollector {
             // === PRIMEIRA EXECUCAO: aprende o ritmo ===
             if (this.lastGameId === null) {
                 this.lastGameId = newestId;
-                this.lastGameTime = new Date(games[0].created_at).getTime();
+                this.lastGameDetectedAt = Date.now(); // NOSSO relogio
 
                 // Calcula ciclo a partir do historico da API
                 this.calculateCycleTime(games);
@@ -189,13 +188,10 @@ class DoubleCollector {
             const newest = games[0];
             const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
 
-            // Calcula atraso real
-            const newGameTime = new Date(newest.created_at).getTime();
-            const delay = ((Date.now() - newGameTime) / 1000).toFixed(1);
-
-            // Atualiza ciclo real (diferenca entre este jogo e o anterior)
-            if (this.lastGameTime) {
-                const realCycle = (newGameTime - this.lastGameTime) / 1000;
+            // Atualiza ciclo real baseado no NOSSO relogio
+            // (quanto tempo levou desde a ultima deteccao)
+            if (this.lastGameDetectedAt) {
+                const realCycle = (Date.now() - this.lastGameDetectedAt) / 1000;
                 if (realCycle > 10 && realCycle < 120) {
                     this.cycleHistory.push(realCycle);
                     if (this.cycleHistory.length > 20) this.cycleHistory.shift();
@@ -207,10 +203,10 @@ class DoubleCollector {
             }
 
             console.log(`\n[NOVO JOGO] Roll ${newest.roll} = ${colorNames[newest.color]} (ID: ${newestId})`);
-            console.log(`[Timing] API: ${fetchTime}ms | Atraso: ${delay}s | Ciclo: ${this.cycleTime}s`);
+            console.log(`[Timing] API: ${fetchTime}ms | Ciclo: ${this.cycleTime}s`);
 
             this.lastGameId = newestId;
-            this.lastGameTime = newGameTime;
+            this.lastGameDetectedAt = Date.now(); // NOSSO relogio
 
             // Estima proximo jogo
             this.estimateNextGame();
@@ -221,7 +217,7 @@ class DoubleCollector {
             const total = await this.getTotalGames();
             console.log(`[Collector] Total: ${total}`);
 
-            // Envia estado completo com jogo novo para dashboards
+            // Envia estado completo COM jogo novo para dashboards
             this.broadcastSync(newest);
 
             // Dispara callback para analise/sinais
@@ -251,7 +247,7 @@ class DoubleCollector {
     }
 
     start() {
-        console.log(`[Collector] Monitorando Blaze API a cada ${this.pollInterval}s...`);
+        console.log(`[Collector] Monitorando Blaze API a cada ${this.pollInterval}s`);
         this.collect();
         this.timer = setInterval(() => this.collect(), this.pollInterval * 1000);
     }

@@ -596,32 +596,38 @@ function generateSpinCards(count) {
 }
 
 // === HANDLER PRINCIPAL: recebe blaze_sync do bot ===
+// Estados: waiting -> spinning_wait -> spinning -> result -> waiting
+// waiting = mostrando countdown
+// spinning_wait = countdown zerou, mostrando "Girando...", esperando resultado
+// spinning = animacao de spin (resultado chegou)
+// result = mostrando resultado
 function handleBlazeSync(data) {
     if (!data || !data.games || data.games.length === 0) return;
 
-    // Atualiza timing
     if (data.cycleTime) blazeCycleTime = data.cycleTime;
-    if (data.nextGameEstimate) blazeNextGame = data.nextGameEstimate;
 
     const newestId = data.games[0].id || data.games[0].game_id;
 
-    // SEMPRE atualiza GIROS ANTERIORES com dados DIRETO da API (espelho perfeito)
+    // SEMPRE atualiza GIROS ANTERIORES com dados DIRETO da API
     updateRouletteHistoryFull(data.games);
 
-    // JOGO NOVO DETECTADO - anima!
-    if (data.newGame && newestId !== lastSyncGameId && rouletteState !== 'spinning') {
+    // JOGO NOVO DETECTADO
+    if (data.newGame && newestId !== lastSyncGameId) {
         lastSyncGameId = newestId;
-        spinRoulette(data.newGame);
+        // Pode animar se estamos em waiting, spinning_wait, ou qualquer estado que nao seja spinning/result
+        if (rouletteState !== 'spinning' && rouletteState !== 'result') {
+            spinRoulette(data.newGame);
+        }
         return;
     }
 
-    // Primeira carga ou update sem jogo novo
+    // Primeira carga
     if (lastSyncGameId === null) {
         lastSyncGameId = newestId;
         initRoulette(data.games);
     }
 
-    // Atualiza countdown com timing do bot
+    // Atualiza countdown (so quando estamos no estado waiting)
     if (rouletteState === 'waiting' && data.secondsToNext !== null && data.secondsToNext !== undefined) {
         updateCountdown(data.secondsToNext);
     }
@@ -713,7 +719,15 @@ function setRouletteStatus(state, text) {
 // Countdown SINCRONIZADO com o ciclo da Blaze (recebe segundos restantes do bot)
 function updateCountdown(secondsToNext) {
     stopCountdown();
-    if (secondsToNext <= 0 || rouletteState !== 'waiting') return;
+    if (rouletteState !== 'waiting') return;
+
+    // Se countdown <= 0, mostra "Girando..." (proximo giro deve estar acontecendo)
+    if (secondsToNext <= 0) {
+        setRouletteStatus('spinning');
+        rouletteState = 'spinning_wait'; // esperando o resultado chegar
+        return;
+    }
+
     let remaining = secondsToNext;
     const total = blazeCycleTime;
     const statusText = document.getElementById('roulette-status-text');
@@ -724,7 +738,15 @@ function updateCountdown(secondsToNext) {
     // Continua contando localmente ate proximo sync
     countdownTimer = setInterval(() => {
         remaining--;
-        if (remaining <= 0) { stopCountdown(); return; }
+        if (remaining <= 0) {
+            stopCountdown();
+            // Quando countdown chega em 0 -> mostra "Girando..."
+            if (rouletteState === 'waiting') {
+                setRouletteStatus('spinning');
+                rouletteState = 'spinning_wait';
+            }
+            return;
+        }
         if (statusText && rouletteState === 'waiting') statusText.textContent = `Girando Em 00:${remaining.toString().padStart(2,'0')}`;
         if (progress && rouletteState === 'waiting') progress.style.width = ((total - remaining) / total * 100) + '%';
     }, 1000);

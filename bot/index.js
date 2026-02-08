@@ -35,7 +35,7 @@ class BotBlaze {
         };
 
         console.log(`[Config] API: ${config.apiUrl}`);
-        console.log(`[Config] Intervalo: ${this.getSetting('collect_interval', 1)}s | Confianca: ${config.signalConfidenceMin}%\n`);
+        console.log(`[Config] Confianca minima: ${config.signalConfidenceMin}%\n`);
 
         this.collector = new DoubleCollector(this.db, config);
         this.analyzer = new DoubleAnalyzer(this.db, config);
@@ -117,12 +117,12 @@ class BotBlaze {
     }
 
     async reloadSettings() {
-        const oldInterval = this.getSetting('collect_interval', 1);
+        const oldInterval = this.getSetting('collect_interval', 2);
         const oldApiUrl = this.getSetting('blaze_api_url', '');
 
         await this.loadSettings();
 
-        const newInterval = this.getSetting('collect_interval', 1);
+        const newInterval = this.getSetting('collect_interval', 2);
         const newApiUrl = this.getSetting('blaze_api_url', '');
 
         if (newInterval !== oldInterval) {
@@ -146,10 +146,20 @@ class BotBlaze {
     }
 
     startCollector() {
-        const seconds = this.getSetting('collect_interval', 1);
+        let seconds = this.getSetting('collect_interval', 2);
+        // PROTECAO: se o valor no banco e > 30, e um valor antigo em milissegundos
+        // Converte para algo razoavel (2s)
+        if (seconds > 30) {
+            console.log(`[Config] AVISO: collect_interval=${seconds} muito alto (valor antigo em ms?). Corrigindo para 2s`);
+            seconds = 2;
+            // Corrige no banco para nao acontecer de novo
+            this.db.execute(
+                "UPDATE bot_settings SET setting_value = '2' WHERE setting_key = 'collect_interval' AND CAST(setting_value AS UNSIGNED) > 30"
+            ).catch(() => {});
+        }
         this.collector.stop();
         this.collector.pollInterval = seconds;
-        console.log(`[Collector] Monitorando API a cada ${seconds}s...`);
+        console.log(`[Collector] Monitorando API a cada ${seconds}s`);
         this.collector.collect();
         this.collector.timer = setInterval(() => this.collector.collect(), seconds * 1000);
     }
@@ -195,8 +205,13 @@ class BotBlaze {
                 ) ENGINE=InnoDB
             `);
 
+            // Corrige valor antigo de collect_interval (era em ms, agora e em segundos)
+            await this.db.execute(
+                "UPDATE bot_settings SET setting_value = '2' WHERE setting_key = 'collect_interval' AND CAST(setting_value AS UNSIGNED) > 30"
+            ).catch(() => {});
+
             const defaults = [
-                ['collect_interval', '1'], ['confidence_min', '55'],
+                ['collect_interval', '2'], ['confidence_min', '55'],
                 ['strategy_sequences', '1'], ['strategy_frequency', '1'],
                 ['strategy_martingale', '1'], ['strategy_ml_patterns', '1'],
                 ['signals_active', '1'], ['max_signals_per_round', '4'],
