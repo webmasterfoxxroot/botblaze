@@ -4,15 +4,15 @@ class DoubleCollector {
     constructor(db, config) {
         this.db = db;
         this.apiUrl = config.apiUrl;
-        this.interval = config.collectInterval || 30000;
         this.timer = null;
         this.lastGameId = null;
+        this.onNewGame = null; // callback quando detecta jogo novo
     }
 
     async fetchRecent() {
         try {
             const response = await axios.get(this.apiUrl, {
-                timeout: 10000,
+                timeout: 8000,
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Accept': 'application/json',
@@ -21,7 +21,6 @@ class DoubleCollector {
             });
             return response.data || [];
         } catch (error) {
-            console.error('[Collector] Erro ao buscar dados:', error.message);
             return [];
         }
     }
@@ -54,13 +53,6 @@ class DoubleCollector {
         return saved;
     }
 
-    async getLast50() {
-        const [rows] = await this.db.execute(
-            'SELECT * FROM game_history_double ORDER BY played_at DESC LIMIT 50'
-        );
-        return rows;
-    }
-
     async getTotalGames() {
         const [rows] = await this.db.execute(
             'SELECT COUNT(*) as total FROM game_history_double'
@@ -70,32 +62,51 @@ class DoubleCollector {
 
     async collect() {
         const games = await this.fetchRecent();
-        if (!games.length) return { fetched: 0, saved: 0 };
+        if (!games.length) return false;
 
-        const newFirst = games[0]?.id;
-        if (newFirst === this.lastGameId) {
-            return { fetched: games.length, saved: 0, message: 'Sem rodadas novas' };
+        const newestId = games[0]?.id;
+
+        // Primeira execucao: salva tudo e memoriza
+        if (this.lastGameId === null) {
+            this.lastGameId = newestId;
+            const saved = await this.saveGames(games);
+            const total = await this.getTotalGames();
+            console.log(`[Collector] Inicial: Salvou ${saved} | Total: ${total}`);
+            return saved > 0;
         }
 
-        this.lastGameId = newFirst;
+        // Sem jogo novo
+        if (newestId === this.lastGameId) return false;
+
+        // JOGO NOVO DETECTADO!
+        const colorNames = { 0: 'BRANCO', 1: 'VERMELHO', 2: 'PRETO' };
+        const newest = games[0];
+        console.log(`\n[NOVO JOGO] Roll ${newest.roll} = ${colorNames[newest.color]} (ID: ${newestId})`);
+
+        this.lastGameId = newestId;
         const saved = await this.saveGames(games);
         const total = await this.getTotalGames();
+        console.log(`[Collector] Salvou ${saved} novos | Total: ${total}`);
 
-        console.log(`[Collector] Buscou ${games.length} | Salvou ${saved} novos | Total: ${total}`);
-        return { fetched: games.length, saved, total };
+        // Dispara callback IMEDIATAMENTE
+        if (this.onNewGame) {
+            await this.onNewGame(newest);
+        }
+
+        return true;
     }
 
     start() {
-        console.log(`[Collector] Iniciando coleta a cada ${this.interval / 1000}s...`);
+        // Polling rapido: checa a cada 5 segundos se tem jogo novo
+        console.log('[Collector] Monitorando API a cada 5s...');
         this.collect();
-        this.timer = setInterval(() => this.collect(), this.interval);
+        this.timer = setInterval(() => this.collect(), 5000);
     }
 
     stop() {
         if (this.timer) {
             clearInterval(this.timer);
             this.timer = null;
-            console.log('[Collector] Coleta parada.');
         }
     }
 }
