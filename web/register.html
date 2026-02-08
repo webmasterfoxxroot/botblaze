@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Conta - BotBlaze</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">BotBlaze</a>
+        <ul class="navbar-nav">
+            <li><a href="login.html">Entrar</a></li>
+        </ul>
+    </nav>
+
+    <div class="auth-page">
+        <div class="auth-card">
+            <h1>Criar Conta</h1>
+            <p class="subtitle">Comece a usar o BotBlaze</p>
+
+            <div id="error-msg" class="alert alert-error" style="display:none;"></div>
+
+            <form id="register-form">
+                <div class="form-group">
+                    <label class="form-label">Nome</label>
+                    <input type="text" name="name" class="form-input" placeholder="Seu nome" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-input" placeholder="seu@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Senha</label>
+                    <input type="password" name="password" class="form-input" placeholder="Minimo 6 caracteres" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Confirmar Senha</label>
+                    <input type="password" name="password2" class="form-input" placeholder="Repita a senha" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full btn-lg" id="register-btn">Criar Conta</button>
+            </form>
+
+            <div class="auth-footer">
+                Ja tem conta? <a href="login.html">Entrar</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const API_URL = window.location.origin + '/api';
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('register-btn');
+        const errorMsg = document.getElementById('error-msg');
+        errorMsg.style.display = 'none';
+
+        const form = new FormData(e.target);
+
+        if (form.get('password') !== form.get('password2')) {
+            errorMsg.textContent = 'As senhas nao conferem.';
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        btn.textContent = 'Criando...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(API_URL + '/auth.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'register',
+                    name: form.get('name'),
+                    email: form.get('email'),
+                    password: form.get('password')
+                })
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                errorMsg.textContent = data.error;
+                errorMsg.style.display = 'block';
+                btn.textContent = 'Criar Conta';
+                btn.disabled = false;
+                return;
+            }
+
+            localStorage.setItem('botblaze_token', data.token);
+            localStorage.setItem('botblaze_user', JSON.stringify(data.user));
+            window.location.href = '/web/dashboard.html';
+        } catch (err) {
+            errorMsg.textContent = 'Erro de conexao. Tente novamente.';
+            errorMsg.style.display = 'block';
+            btn.textContent = 'Criar Conta';
+            btn.disabled = false;
+        }
+    });
+    </script>
+</body>
+</html>

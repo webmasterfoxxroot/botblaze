@@ -1,0 +1,166 @@
+/* BotBlaze - Overlay CSS (injected via content_scripts on blaze.bet.br) */
+
+#botblaze-overlay {
+    position: fixed;
+    top: 80px;
+    right: 16px;
+    width: 260px;
+    background: #1a1a2e;
+    border: 1px solid #e63946;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    z-index: 999999;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #e0e0e0;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* Header */
+.bb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #e63946, #b02a37);
+    cursor: move;
+}
+
+.bb-logo {
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+
+.bb-toggle-area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bb-minimize {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.bb-minimize:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+/* Toggle switch */
+.bb-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+
+.bb-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.bb-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #444;
+    border-radius: 20px;
+    transition: 0.3s;
+}
+
+.bb-slider::before {
+    content: '';
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.bb-switch input:checked + .bb-slider {
+    background: #2ecc71;
+}
+
+.bb-switch input:checked + .bb-slider::before {
+    transform: translateX(16px);
+}
+
+.bb-switch input:disabled + .bb-slider {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Body */
+.bb-body {
+    padding: 12px 14px;
+}
+
+.bb-msg {
+    text-align: center;
+    color: #aaa;
+    font-size: 12px;
+    margin: 8px 0;
+    line-height: 1.4;
+}
+
+/* Stats */
+.bb-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.bb-stat-row:last-child {
+    border-bottom: none;
+}
+
+.bb-stat-row span:first-child {
+    color: #999;
+    font-size: 12px;
+}
+
+.bb-stat-row span:last-child {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* Status colors */
+.bb-on {
+    color: #2ecc71;
+    font-weight: 700;
+}
+
+.bb-off {
+    color: #e74c3c;
+    font-weight: 700;
+}
+
+.bb-green {
+    color: #2ecc71;
+}
+
+.bb-red {
+    color: #e74c3c;
+}

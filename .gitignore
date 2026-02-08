@@ -1,5 +1,5 @@
-node_modules/
 .env
-bot/data/
+node_modules/
 *.log
 .DS_Store
+extension/*.pem

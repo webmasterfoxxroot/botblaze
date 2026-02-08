@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar - BotBlaze</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">BotBlaze</a>
+        <ul class="navbar-nav">
+            <li><a href="register.html">Criar Conta</a></li>
+        </ul>
+    </nav>
+
+    <div class="auth-page">
+        <div class="auth-card">
+            <h1>Entrar</h1>
+            <p class="subtitle">Acesse sua conta BotBlaze</p>
+
+            <div id="error-msg" class="alert alert-error" style="display:none;"></div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-input" placeholder="seu@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Senha</label>
+                    <input type="password" name="password" class="form-input" placeholder="Sua senha" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn">Entrar</button>
+            </form>
+
+            <div class="auth-footer">
+                Nao tem conta? <a href="register.html">Crie uma agora</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const API_URL = window.location.origin + '/api';
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('login-btn');
+        const errorMsg = document.getElementById('error-msg');
+        errorMsg.style.display = 'none';
+        btn.textContent = 'Entrando...';
+        btn.disabled = true;
+
+        const form = new FormData(e.target);
+
+        try {
+            const res = await fetch(API_URL + '/auth.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'login',
+                    email: form.get('email'),
+                    password: form.get('password')
+                })
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                errorMsg.textContent = data.error;
+                errorMsg.style.display = 'block';
+                btn.textContent = 'Entrar';
+                btn.disabled = false;
+                return;
+            }
+
+            // Salva token e redireciona
+            localStorage.setItem('botblaze_token', data.token);
+            localStorage.setItem('botblaze_user', JSON.stringify(data.user));
+
+            if (data.user.role === 'admin') {
+                window.location.href = '/web/admin.html';
+            } else {
+                window.location.href = '/web/dashboard.html';
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Erro de conexao. Tente novamente.';
+            errorMsg.style.display = 'block';
+            btn.textContent = 'Entrar';
+            btn.disabled = false;
+        }
+    });
+    </script>
+</body>
+</html>
