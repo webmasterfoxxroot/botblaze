@@ -87,5 +87,14 @@ ON DUPLICATE KEY UPDATE name = name;
 
 -- Admin padrao (senha: admin123)
 INSERT INTO users (name, email, password, role) VALUES
-('Admin', 'admin@botblaze.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin')
+('Admin', 'admin@botblaze.com', '$2y$12$v5jLp..8gGyVUCsvF8.jsOydGDF5Txo2CBRg1W8YKrcsf4Y4krUFe', 'admin')
 ON DUPLICATE KEY UPDATE email = email;
+
+-- Assinatura do admin (365 dias)
+INSERT INTO subscriptions (user_id, plan_id, status, expires_at)
+SELECT 1, 2, 'active', DATE_ADD(NOW(), INTERVAL 365 DAY)
+FROM dual WHERE NOT EXISTS (SELECT 1 FROM subscriptions WHERE user_id = 1);
+
+-- Settings padrao do admin
+INSERT INTO user_settings (user_id) VALUES (1)
+ON DUPLICATE KEY UPDATE user_id = user_id;

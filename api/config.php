@@ -1,5 +1,5 @@
 <?php
-// BotBlaze API - Configuration, DB connection, and helper functions
+// BotBlaze API - Configuration, DB connection (MySQL), and helper functions
 
 // Load .env from parent dir
 $envFile = __DIR__ . '/../.env';
@@ -45,8 +45,20 @@ function getInput() {
 }
 
 // Validate API token (used by Chrome extension)
+function getAuthHeader() {
+    if (!empty($_SERVER['HTTP_AUTHORIZATION'])) return $_SERVER['HTTP_AUTHORIZATION'];
+    if (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) return $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        foreach ($headers as $k => $v) {
+            if (strtolower($k) === 'authorization') return $v;
+        }
+    }
+    return '';
+}
+
 function validateToken() {
-    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $header = getAuthHeader();
     $token = str_replace('Bearer ', '', $header);
     if (!$token) jsonResponse(['error' => 'Token obrigatorio'], 401);
 

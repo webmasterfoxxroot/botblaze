@@ -73,7 +73,7 @@
             }
 
             // Salva token e redireciona
-            localStorage.setItem('botblaze_token', data.token);
+            localStorage.setItem('botblaze_token', data.api_token || data.token);
             localStorage.setItem('botblaze_user', JSON.stringify(data.user));
 
             if (data.user.role === 'admin') {
