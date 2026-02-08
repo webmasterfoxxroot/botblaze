@@ -13,7 +13,6 @@ class BotBlaze {
         this.collector = null;
         this.analyzer = null;
         this.signals = null;
-        this.analysisTimer = null;
     }
 
     async start() {
@@ -22,8 +21,8 @@ class BotBlaze {
         console.log('  Double Game Analyzer');
         console.log('=================================\n');
 
-        // Conecta no MySQL
         await this.connectDB();
+        await this.migrateDB();
 
         const config = {
             apiUrl: process.env.BLAZE_API_URL || 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1',
@@ -32,41 +31,23 @@ class BotBlaze {
             signalConfidenceMin: parseInt(process.env.SIGNAL_CONFIDENCE_MIN) || 65
         };
 
-        // Inicializa modulos
         this.collector = new DoubleCollector(this.db, config);
         this.analyzer = new DoubleAnalyzer(this.db, config);
         this.signals = new DoubleSignals(this.db, config);
 
-        // Inicia WebSocket para dashboard
         this.startWebSocket();
-
-        // Inicia coleta
         this.collector.start();
 
-        // Verificacao rapida a cada 10s (separada da analise)
+        // VERIFICACAO RAPIDA a cada 10s (separada da analise)
         console.log('[Bot] Verificacao de sinais a cada 10s');
-        this.verifyTimer = setInterval(async () => {
-            try {
-                const verified = await this.signals.verifyLastSignals();
-                if (verified > 0) {
-                    const stats = await this.signals.getStats();
-                    const strategyStats = await this.signals.getStatsByStrategy();
-                    this.broadcast({ type: 'stats_update', data: { stats, strategyStats } });
-                }
-            } catch (err) {
-                // silencioso
-            }
-        }, 10000);
+        setInterval(() => this.runVerification(), 10000);
 
-        // Inicia loop de analise (a cada 35s, logo apos cada coleta)
+        // Analise a cada 35s
         const analysisInterval = config.collectInterval + 5000;
         console.log(`[Bot] Analise a cada ${analysisInterval / 1000}s\n`);
+        setInterval(() => this.runAnalysis(), analysisInterval);
 
-        this.analysisTimer = setInterval(async () => {
-            await this.runAnalysis();
-        }, analysisInterval);
-
-        // Primeira analise apos 10s
+        // Primeira execucao apos 10s
         setTimeout(() => this.runAnalysis(), 10000);
     }
 
@@ -84,23 +65,38 @@ class BotBlaze {
             });
 
             await this.db.execute('SELECT 1');
-            console.log('[DB] Conectado ao MySQL com sucesso\n');
+            console.log('[DB] Conectado ao MySQL com sucesso');
         } catch (err) {
             console.error('[DB] Erro ao conectar:', err.message);
-            console.error('[DB] Verifique as configuracoes no .env');
             process.exit(1);
         }
+    }
+
+    // Auto-cria colunas que faltam (nao precisa rodar SQL manual)
+    async migrateDB() {
+        try {
+            const [cols] = await this.db.execute(
+                `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'signals' AND COLUMN_NAME = 'ref_game_db_id'`,
+                [process.env.DB_NAME || 'botblaze']
+            );
+            if (cols.length === 0) {
+                await this.db.execute('ALTER TABLE signals ADD COLUMN ref_game_db_id INT NULL');
+                console.log('[DB] Coluna ref_game_db_id adicionada automaticamente');
+            }
+        } catch (err) {
+            console.error('[DB] Aviso migracao:', err.message);
+        }
+        console.log('[DB] Schema OK\n');
     }
 
     startWebSocket() {
         const port = parseInt(process.env.BOT_PORT) || 3001;
         this.wss = new WebSocketServer({ port });
-
         this.wss.on('connection', (ws) => {
             console.log('[WS] Dashboard conectado');
             ws.send(JSON.stringify({ type: 'connected', message: 'BotBlaze Engine conectado' }));
         });
-
         console.log(`[WS] WebSocket rodando na porta ${port}\n`);
     }
 
@@ -108,26 +104,37 @@ class BotBlaze {
         if (!this.wss) return;
         const message = JSON.stringify(data);
         this.wss.clients.forEach(client => {
-            if (client.readyState === 1) {
-                client.send(message);
-            }
+            if (client.readyState === 1) client.send(message);
         });
     }
 
+    // Roda verificacao de WIN/LOSS a cada 10s
+    async runVerification() {
+        try {
+            const verified = await this.signals.verifyLastSignals();
+            if (verified > 0) {
+                const stats = await this.signals.getStats();
+                const strategyStats = await this.signals.getStatsByStrategy();
+                this.broadcast({ type: 'stats_update', data: { stats, strategyStats } });
+            }
+        } catch (err) {
+            console.error('[Verify] ERRO:', err.message);
+        }
+    }
+
+    // Roda analise e gera novos sinais
     async runAnalysis() {
         try {
-            // Roda analise
+            // Tambem verifica aqui como backup
+            await this.signals.verifyLastSignals();
+
             const analysis = await this.analyzer.analyze();
             if (!analysis) return;
 
-            // Gera sinais separados por estrategia
             const newSignals = await this.signals.generateSignals(analysis);
-
-            // Busca stats gerais e por estrategia
             const stats = await this.signals.getStats();
             const strategyStats = await this.signals.getStatsByStrategy();
 
-            // Envia para dashboards conectados
             this.broadcast({
                 type: 'analysis',
                 data: {
@@ -148,7 +155,6 @@ class BotBlaze {
     }
 }
 
-// Inicia o bot
 const bot = new BotBlaze();
 bot.start().catch(err => {
     console.error('Erro fatal:', err);
