@@ -8,6 +8,12 @@ class DoubleSignals {
     async generateSignals(analysisResult) {
         if (!analysisResult || !analysisResult.allPredictions) return [];
 
+        // Pega o ID do ultimo jogo salvo (referencia para verificacao)
+        const [lastGameRow] = await this.db.execute(
+            'SELECT id FROM game_history_double ORDER BY id DESC LIMIT 1'
+        );
+        const refGameId = lastGameRow.length > 0 ? lastGameRow[0].id : null;
+
         const signals = [];
 
         for (const prediction of analysisResult.allPredictions) {
@@ -15,7 +21,7 @@ class DoubleSignals {
 
             // Evita duplicado: mesma estrategia + mesma cor nos ultimos 30s
             const [lastSignal] = await this.db.execute(
-                `SELECT * FROM signals WHERE game_type = 'double'
+                `SELECT id, created_at FROM signals WHERE game_type = 'double'
                  AND strategy_used = ? AND predicted_color = ?
                  ORDER BY created_at DESC LIMIT 1`,
                 [prediction.strategy, prediction.color]
@@ -26,11 +32,11 @@ class DoubleSignals {
                 if (timeDiff < 30000) continue;
             }
 
-            // Salva sinal individual
+            // Salva sinal individual com ref_game_db_id
             const [result] = await this.db.execute(
-                `INSERT INTO signals (game_type, predicted_color, confidence, strategy_used)
-                 VALUES ('double', ?, ?, ?)`,
-                [prediction.color, prediction.confidence, prediction.strategy]
+                `INSERT INTO signals (game_type, predicted_color, confidence, strategy_used, ref_game_db_id)
+                 VALUES ('double', ?, ?, ?, ?)`,
+                [prediction.color, prediction.confidence, prediction.strategy, refGameId]
             );
 
             const signal = {
@@ -56,36 +62,53 @@ class DoubleSignals {
     }
 
     async verifyLastSignals() {
+        // Busca sinais pendentes (sem delay de 1 minuto - verifica imediatamente)
         const [pendingSignals] = await this.db.execute(
             `SELECT s.* FROM signals s
              WHERE s.result = 'pending' AND s.game_type = 'double'
-             AND s.created_at < NOW() - INTERVAL 1 MINUTE
              ORDER BY s.created_at DESC LIMIT 50`
         );
 
+        if (pendingSignals.length === 0) return 0;
+
         let wins = 0, losses = 0;
         for (const signal of pendingSignals) {
-            const [nextGame] = await this.db.execute(
-                `SELECT * FROM game_history_double
-                 WHERE played_at > ?
-                 ORDER BY played_at ASC LIMIT 1`,
-                [signal.created_at]
-            );
+            let nextGame = null;
 
-            if (nextGame.length > 0) {
-                const game = nextGame[0];
-                const isWin = game.color === signal.predicted_color;
+            if (signal.ref_game_db_id) {
+                // Metodo robusto: encontra o proximo jogo pelo ID do DB (sem problema de timezone)
+                const [rows] = await this.db.execute(
+                    `SELECT * FROM game_history_double
+                     WHERE id > ?
+                     ORDER BY id ASC LIMIT 1`,
+                    [signal.ref_game_db_id]
+                );
+                if (rows.length > 0) nextGame = rows[0];
+            } else {
+                // Fallback para sinais antigos sem ref_game_db_id: usa timestamp
+                const [rows] = await this.db.execute(
+                    `SELECT * FROM game_history_double
+                     WHERE played_at > ?
+                     ORDER BY played_at ASC LIMIT 1`,
+                    [signal.created_at]
+                );
+                if (rows.length > 0) nextGame = rows[0];
+            }
+
+            if (nextGame) {
+                const isWin = nextGame.color === signal.predicted_color;
 
                 await this.db.execute(
                     `UPDATE signals SET result = ?, actual_color = ? WHERE id = ?`,
-                    [isWin ? 'win' : 'loss', game.color, signal.id]
+                    [isWin ? 'win' : 'loss', nextGame.color, signal.id]
                 );
+
                 if (isWin) wins++; else losses++;
             }
         }
 
         if (wins + losses > 0) {
-            console.log(`[Signals] Verificou ${wins + losses} sinais: ${wins} WIN / ${losses} LOSS`);
+            console.log(`[Verify] ${wins} WIN / ${losses} LOSS (${wins + losses} sinais verificados)`);
         }
         return wins + losses;
     }

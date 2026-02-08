@@ -43,6 +43,21 @@ class BotBlaze {
         // Inicia coleta
         this.collector.start();
 
+        // Verificacao rapida a cada 10s (separada da analise)
+        console.log('[Bot] Verificacao de sinais a cada 10s');
+        this.verifyTimer = setInterval(async () => {
+            try {
+                const verified = await this.signals.verifyLastSignals();
+                if (verified > 0) {
+                    const stats = await this.signals.getStats();
+                    const strategyStats = await this.signals.getStatsByStrategy();
+                    this.broadcast({ type: 'stats_update', data: { stats, strategyStats } });
+                }
+            } catch (err) {
+                // silencioso
+            }
+        }, 10000);
+
         // Inicia loop de analise (a cada 35s, logo apos cada coleta)
         const analysisInterval = config.collectInterval + 5000;
         console.log(`[Bot] Analise a cada ${analysisInterval / 1000}s\n`);
@@ -101,9 +116,6 @@ class BotBlaze {
 
     async runAnalysis() {
         try {
-            // Verifica sinais anteriores
-            await this.signals.verifyLastSignals();
-
             // Roda analise
             const analysis = await this.analyzer.analyze();
             if (!analysis) return;
