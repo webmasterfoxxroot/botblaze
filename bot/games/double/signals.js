@@ -103,14 +103,15 @@ class DoubleSignals {
         `);
 
         const s = stats[0];
-        const decided = s.wins + s.losses;
+        const decided = (Number(s.wins) || 0) + (Number(s.losses) || 0);
+        const avgConf = Number(s.avg_confidence) || 0;
         return {
-            total: s.total,
-            wins: s.wins,
-            losses: s.losses,
-            pending: s.pending,
-            winRate: decided > 0 ? ((s.wins / decided) * 100).toFixed(1) : 0,
-            avgConfidence: s.avg_confidence ? s.avg_confidence.toFixed(1) : 0
+            total: Number(s.total) || 0,
+            wins: Number(s.wins) || 0,
+            losses: Number(s.losses) || 0,
+            pending: Number(s.pending) || 0,
+            winRate: decided > 0 ? ((Number(s.wins) / decided) * 100).toFixed(1) : 0,
+            avgConfidence: avgConf > 0 ? avgConf.toFixed(1) : 0
         };
     }
 
