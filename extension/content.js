@@ -88,6 +88,9 @@
         // Controle de agendamento de aposta (impede duplicatas)
         _betPending: false,
 
+        // Cooldown apos martingale estourar (pula rodadas)
+        _mgCooldown: 0,
+
         // Controle de deteccao de novos resultados
         lastHistorySignature: '',
 
@@ -1503,12 +1506,16 @@
                 ? state.currentBetAmount * (multiplier - 1)
                 : -state.currentBetAmount;
 
+            // Salva nivel antes de alterar (para registrar corretamente)
+            const mgLevelAtBet = state.martingaleLevel;
+
             state.sessionProfit += profit;
 
             if (won) {
                 state.sessionWins++;
                 state.martingaleLevel = 0;
                 state.lastBetResult = 'win';
+                state._mgCooldown = 0; // Win limpa cooldown
                 console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
             } else {
                 state.sessionLosses++;
@@ -1526,14 +1533,16 @@
                         console.log('[BotBlaze] DERROTA. Martingale -> nv ' + state.martingaleLevel);
                     } else {
                         state.martingaleLevel = 0;
-                        console.log('[BotBlaze] DERROTA. Martingale MAX - resetando');
+                        state.lastBetColor = null; // Limpa cor pra nao repetir
+                        state._mgCooldown = 3; // Pula 3 rodadas antes de apostar de novo
+                        console.log('[BotBlaze] DERROTA. Martingale MAX atingido! Pausando 3 rodadas.');
                     }
                 } else {
                     console.log('[BotBlaze] DERROTA. -R$' + Math.abs(profit).toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
                 }
             }
 
-            // Registra no backend
+            // Registra no backend (usa nivel no momento da aposta, nao apos alteracao)
             sendMessage({
                 action: 'recordBet',
                 payload: {
@@ -1545,8 +1554,8 @@
                     profit: profit,
                     roll_result: color,
                     roll_result_name: COLOR_NAMES[color],
-                    was_martingale: state.martingaleLevel > 0 ? 1 : 0,
-                    martingale_level: state.martingaleLevel,
+                    was_martingale: mgLevelAtBet > 0 ? 1 : 0,
+                    martingale_level: mgLevelAtBet,
                     session_profit: state.sessionProfit,
                     timestamp: new Date().toISOString()
                 }
@@ -1581,6 +1590,14 @@
         if (state.waitingResult) return;
         if (state._betPending) return; // Ja tem aposta agendada
         if (Date.now() - state.lastBetTime < MIN_BET_INTERVAL) return;
+
+        // Cooldown apos martingale estourar - pula rodadas
+        if (state._mgCooldown > 0) {
+            state._mgCooldown--;
+            console.log('[BotBlaze] Cooldown pos-martingale: pulando (' + (state._mgCooldown + 1) + ' restantes)');
+            updateOverlay();
+            return;
+        }
 
         if (!checkLimits()) {
             console.log('[BotBlaze] Limites atingidos. Desligando bot.');
