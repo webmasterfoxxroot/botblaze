@@ -277,13 +277,15 @@ async function handleGetState() {
 function getDefaultSettings() {
     return {
         bet_amount: 2.00,
-        strategy: 'frequency',
+        strategy: 'moderado',
+        min_confidence: 60,
+        bet_white: 1,
         martingale_enabled: false,
         martingale_max: 3,
         martingale_multiplier: 2.0,
         stop_loss: 50.00,
-        stop_gain: 50.00,
-        max_bets_per_day: 100,
+        stop_gain: 100.00,
+        max_bets_per_day: 50,
         auto_bet: false
     };
 }
