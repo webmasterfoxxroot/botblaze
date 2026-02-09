@@ -1249,16 +1249,8 @@
             return false;
         }
 
-        // Delay entre definir valor e clicar na cor
-        setTimeout(() => {
-            clickColorElement(colorButton, color);
-
-            // 3. Aguarda 500ms para Blaze processar a selecao de cor,
-            // depois aguarda botao "Começar o jogo" ficar disponivel e clica
-            setTimeout(() => {
-                waitAndClickConfirm(0);
-            }, 500);
-        }, 300);
+        // Aguarda botao de cor ficar ativo (sai de "disabled"), depois clica
+        waitForColorAndClick(color, 0);
 
         // Salva saldo ANTES da aposta (para verificar se efetivou)
         state.balanceBeforeBet = readBalance();
@@ -1554,6 +1546,81 @@
      * Clica num botao de cor (div.red/black/white) na Blaze.
      * Usa .click() nativo (isTrusted:true) no filho mais interno.
      */
+    /**
+     * Aguarda o botao de cor ficar ativo (sem classe "disabled") e clica.
+     * A Blaze desabilita os botoes de cor durante a fase "Esperando".
+     */
+    function waitForColorAndClick(color, attempt) {
+        const MAX_ATTEMPTS = 15;
+        const POLL_INTERVAL = 400;
+        const targetClass = color === COLOR_RED ? 'red' : color === COLOR_BLACK ? 'black' : 'white';
+
+        // Busca o botao de cor
+        const selectors = [
+            '.double-button-wrapper > div.' + targetClass,
+            '.double-button-wrapper > .' + targetClass,
+            '.double-button-wrapper .' + targetClass
+        ];
+
+        let btn = null;
+        for (const sel of selectors) {
+            try {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) { btn = el; break; }
+            } catch (e) {}
+        }
+
+        if (!btn) {
+            if (attempt < MAX_ATTEMPTS) {
+                console.log('[BotBlaze] Cor: botao nao encontrado, tentativa ' + (attempt + 1) + '/' + MAX_ATTEMPTS);
+                setTimeout(() => waitForColorAndClick(color, attempt + 1), POLL_INTERVAL);
+            } else {
+                console.warn('[BotBlaze] Cor: desistiu - botao nao encontrado');
+            }
+            return;
+        }
+
+        // Verifica se o botao ou pai tem classe "disabled"
+        const cls = (btn.className || '').toString().toLowerCase();
+        const parentCls = (btn.parentElement && btn.parentElement.className || '').toString().toLowerCase();
+        const isDisabled = cls.includes('disabled') || parentCls.includes('disabled') ||
+                           btn.hasAttribute('disabled') || btn.getAttribute('aria-disabled') === 'true';
+
+        if (isDisabled) {
+            if (attempt < MAX_ATTEMPTS) {
+                console.log('[BotBlaze] Cor: botao disabled, aguardando... (' + (attempt + 1) + '/' + MAX_ATTEMPTS + ')');
+                setTimeout(() => waitForColorAndClick(color, attempt + 1), POLL_INTERVAL);
+            } else {
+                console.warn('[BotBlaze] Cor: desistiu - botao permaneceu disabled');
+            }
+            return;
+        }
+
+        // Botao ativo! Clica com delay humano
+        const delay = 150 + Math.floor(Math.random() * 200);
+        setTimeout(() => {
+            // Re-busca para garantir que nao ficou stale
+            let freshBtn = null;
+            for (const sel of selectors) {
+                try {
+                    const el = document.querySelector(sel);
+                    if (el && el.offsetParent !== null) { freshBtn = el; break; }
+                } catch (e) {}
+            }
+
+            if (freshBtn) {
+                clickColorElement(freshBtn, color);
+            } else {
+                console.warn('[BotBlaze] Cor: botao sumiu antes do click');
+            }
+
+            // Depois de clicar na cor, aguarda confirm button
+            setTimeout(() => {
+                waitAndClickConfirm(0);
+            }, 500);
+        }, delay);
+    }
+
     function clickColorElement(element, color) {
         // Encontra o filho mais interno (ex: <div>x2</div> dentro de <div class="red">)
         let deepest = element;
