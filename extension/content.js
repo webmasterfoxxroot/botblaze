@@ -1882,15 +1882,13 @@
                     const wasInMartingale = mgLevelAtBet > 0;
                     state.martingaleLevel = 0;
                     state.lastBetResult = 'win';
+                    state.lastBetColor = null; // Limpa cor pra nao repetir
+                    state._mgCooldown = 1; // SEMPRE pula 1 rodada apos WIN (espera novo sinal)
 
                     if (wasInMartingale) {
-                        // Ganhou no martingale: PARA e espera proximo sinal
-                        state._mgCooldown = 1; // Pula 1 rodada antes de apostar de novo
-                        state.lastBetColor = null; // Limpa cor pra nao repetir
                         console.log('[BotBlaze] VITORIA no Martingale nv ' + mgLevelAtBet + '! Recuperou R$' + profit.toFixed(2) + '. Pausando 1 rodada.');
                     } else {
-                        state._mgCooldown = 0; // Win normal limpa cooldown
-                        console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+                        console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2) + '. Pausando 1 rodada.');
                     }
                 } else {
                     state.sessionLosses++;
