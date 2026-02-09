@@ -318,33 +318,20 @@
         btn.disabled = true;
         btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M2 12l10 10 10-10"/></svg> Baixando...';
 
-        // Faz download via fetch para incluir o token de autenticacao
-        fetch(API_URL + '/extension.php', {
-            headers: { 'Authorization': 'Bearer ' + token }
-        })
-        .then(res => {
-            if (!res.ok) throw new Error('Erro ao baixar extensao');
-            return res.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'BotBlaze-Extension.zip';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            showToast('Extensao baixada com sucesso!');
-        })
-        .catch(err => {
-            console.error('Erro download:', err);
-            showToast('Erro ao baixar extensao');
-        })
-        .finally(() => {
+        // Download direto via link com token na URL
+        const downloadUrl = API_URL + '/extension.php?token=' + encodeURIComponent(token);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = 'BotBlaze-Extension.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('Download iniciado!');
+
+        setTimeout(() => {
             btn.disabled = false;
             btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Baixar';
-        });
+        }, 2000);
     }
 
     function showToast(msg) {
