@@ -1908,7 +1908,6 @@
                         onBettingPhase();
                     }, 800);
                 }
-            } // fim do else (aposta efetivada)
         }
 
         updateOverlay();
