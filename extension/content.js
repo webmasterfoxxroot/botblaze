@@ -28,6 +28,14 @@
         [COLOR_BLACK]: 2
     };
 
+    // Traduz fase interna para exibicao em portugues (como na Blaze)
+    const PHASE_NAMES = {
+        'betting':  'Esperando Apostas',
+        'spinning': 'Girando',
+        'result':   'Resultado',
+        'unknown':  'Aguardando'
+    };
+
     // Blaze Double: converte numero do resultado em cor
     // 0 = Branco (x14), 1-7 = Vermelho (x2), 8-14 = Preto (x2)
     function numberToColor(num) {
@@ -1703,7 +1711,7 @@
                     <span id="bb-bets">${state.sessionBets}</span>
                 </div>
                 <div class="bb-stat-row">
-                    <span class="bb-stat-label">Win / Loss</span>
+                    <span class="bb-stat-label">Vitorias / Derrotas</span>
                     <span>
                         <span class="bb-green" id="bb-wins">${state.sessionWins}</span>
                         /
@@ -1712,7 +1720,7 @@
                 </div>
                 <div class="bb-stat-row">
                     <span class="bb-stat-label">Martingale</span>
-                    <span id="bb-mg">${state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel : 'Off'}</span>
+                    <span id="bb-mg">${state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel : 'Desligado'}</span>
                 </div>
                 <div class="bb-stat-row">
                     <span class="bb-stat-label">Ultima Aposta</span>
@@ -1720,7 +1728,7 @@
                 </div>
                 <div class="bb-stat-row">
                     <span class="bb-stat-label">Fase</span>
-                    <span id="bb-phase">${state.gamePhase}</span>
+                    <span id="bb-phase">${PHASE_NAMES[state.gamePhase] || state.gamePhase}</span>
                 </div>
                 <div class="bb-stat-row">
                     <span class="bb-stat-label">Historico</span>
@@ -1839,17 +1847,17 @@
             ids.losses.textContent = state.sessionLosses;
         }
         if (ids.phase) {
-            ids.phase.textContent = state.gamePhase;
+            ids.phase.textContent = PHASE_NAMES[state.gamePhase] || state.gamePhase;
         }
         if (ids.mg) {
-            ids.mg.textContent = state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel : 'Off';
+            ids.mg.textContent = state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel : 'Desligado';
         }
         if (ids.lastBet) {
             if (state.waitingResult && state.currentBetColor !== null) {
                 ids.lastBet.textContent = COLOR_NAMES[state.currentBetColor] + ' R$' + state.currentBetAmount.toFixed(2) + ' (aguardando)';
             } else if (state.sessionBets > 0) {
                 const lastWon = state.sessionWins > 0 && (state.sessionProfit >= 0);
-                ids.lastBet.textContent = lastWon ? 'Ultima: Win' : 'Ultima: Loss';
+                ids.lastBet.textContent = lastWon ? 'Ultima: Vitoria' : 'Ultima: Derrota';
             } else {
                 ids.lastBet.textContent = '-';
             }
@@ -1894,7 +1902,7 @@
             const avg = Math.round(analysis.avgWhiteInterval);
             const ratio = avg > 0 ? gap / avg : 0;
             const gapColor = ratio >= 1.5 ? '#ef4444' : ratio >= 1.0 ? '#fbbf24' : '#9ca3af';
-            ids.whiteGap.innerHTML = '<span style="color:' + gapColor + '">' + gap + '</span> <small>(avg ' + avg + ')</small>';
+            ids.whiteGap.innerHTML = '<span style="color:' + gapColor + '">' + gap + '</span> <small>(media ' + avg + ')</small>';
         }
     }
 
