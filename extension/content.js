@@ -99,6 +99,7 @@
 
         // Saldo lido da pagina
         balance: 0,
+        balanceBeforeBet: 0, // Saldo antes da aposta (para verificar se efetivou)
 
         // Contador de retries do historico
         _historyRetryCount: 0
@@ -1218,6 +1219,10 @@
             }, 500);
         }, 300);
 
+        // Salva saldo ANTES da aposta (para verificar se efetivou)
+        state.balanceBeforeBet = readBalance();
+        console.log('[BotBlaze] Saldo antes da aposta: R$' + state.balanceBeforeBet.toFixed(2));
+
         // Atualiza estado
         state.currentBetColor = color;
         state.lastBetColor = color; // Guarda para martingale (nao reseta apos resultado)
@@ -1513,6 +1518,20 @@
             const x = rect.left + rect.width / 2;
             const y = rect.top + rect.height / 2;
 
+            // Esconde overlay temporariamente para elementFromPoint nao pegar ele
+            const overlay = document.getElementById('botblaze-overlay');
+            if (overlay) overlay.style.pointerEvents = 'none';
+
+            // Encontra o elemento mais interno nas coordenadas do click
+            // (igual ao que o navegador faz quando usuario clica de verdade)
+            const target = document.elementFromPoint(x, y) || element;
+
+            // Restaura overlay
+            if (overlay) overlay.style.pointerEvents = '';
+
+            // Se elementFromPoint retornou algo fora do elemento esperado, usa o original
+            const finalTarget = element.contains(target) ? target : element;
+
             const opts = {
                 bubbles: true,
                 cancelable: true,
@@ -1524,11 +1543,16 @@
                 button: 0
             };
 
-            // Sequencia minima: pointerdown → pointerup → click
-            // React usa SyntheticEvent via delegacao no root - 1 click = 1 evento
-            element.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 1 }));
-            element.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 0 }));
-            element.dispatchEvent(new MouseEvent('click', opts));
+            // Sequencia completa como click real do navegador
+            finalTarget.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 1 }));
+            finalTarget.dispatchEvent(new MouseEvent('mousedown', { ...opts, buttons: 1 }));
+            finalTarget.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 0 }));
+            finalTarget.dispatchEvent(new MouseEvent('mouseup', opts));
+            finalTarget.dispatchEvent(new MouseEvent('click', opts));
+
+            console.log('[BotBlaze] simulateClick: target=' + finalTarget.tagName +
+                '.' + (finalTarget.className || '').toString().substring(0, 30) +
+                ' texto=' + (finalTarget.textContent || '').trim().substring(0, 15));
         } catch (e) {
             try { element.click(); } catch (e2) {}
         }
@@ -1563,81 +1587,126 @@
 
         // Processa aposta pendente
         if (state.waitingResult && state.currentBetColor !== null) {
-            const won = (state.currentBetColor === color);
-            const multiplier = COLOR_MULTIPLIERS[color] || 2;
-            const profit = won
-                ? state.currentBetAmount * (multiplier - 1)
-                : -state.currentBetAmount;
+            // VERIFICACAO VIA SALDO: confirma se aposta foi efetivada
+            const balanceAfter = readBalance();
+            const balanceDiff = balanceAfter - state.balanceBeforeBet;
+            const betWasPlaced = (state.balanceBeforeBet > 0 && Math.abs(balanceDiff) > 0.01);
 
-            // Salva nivel antes de alterar (para registrar corretamente)
-            const mgLevelAtBet = state.martingaleLevel;
+            if (!betWasPlaced && state.balanceBeforeBet > 0) {
+                // Saldo nao mudou = aposta NAO foi efetivada na Blaze
+                console.warn('[BotBlaze] APOSTA NAO EFETIVADA! Saldo antes: R$' +
+                    state.balanceBeforeBet.toFixed(2) + ' | Saldo agora: R$' +
+                    balanceAfter.toFixed(2) + ' | Diferenca: R$' + balanceDiff.toFixed(2));
 
-            state.sessionProfit += profit;
+                // Nao conta como loss, reseta estado e tenta novamente
+                state.waitingResult = false;
+                state.currentBetColor = null;
+                state.currentBetAmount = 0;
+                state.sessionBets--; // Desconta a aposta que nao efetivou
+                state.todayBets--;
 
-            if (won) {
-                state.sessionWins++;
-                state.martingaleLevel = 0;
-                state.lastBetResult = 'win';
-                state._mgCooldown = 0; // Win limpa cooldown
-                console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+                // Se fase e betting, tenta apostar de novo
+                if (state.botActive && state.gamePhase === 'betting') {
+                    console.log('[BotBlaze] Tentando apostar novamente na proxima oportunidade...');
+                    setTimeout(() => { onBettingPhase(); }, 1000);
+                }
+
+                saveSessionStats();
+                updateOverlay();
+                // Nao processa como win/loss
             } else {
-                state.sessionLosses++;
-                state.lastBetResult = 'loss';
+                // Aposta efetivada - calcula resultado
+                const won = (state.currentBetColor === color);
 
-                const mgEnabled = (
-                    state.settings &&
-                    (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1)
-                );
-
-                if (mgEnabled) {
-                    const maxLevel = parseInt(state.settings.martingale_max) || 3;
-                    if (state.martingaleLevel < maxLevel) {
-                        state.martingaleLevel++;
-                        console.log('[BotBlaze] DERROTA. Martingale -> nv ' + state.martingaleLevel);
-                    } else {
-                        state.martingaleLevel = 0;
-                        state.lastBetColor = null; // Limpa cor pra nao repetir
-                        state._mgCooldown = 3; // Pula 3 rodadas antes de apostar de novo
-                        console.log('[BotBlaze] DERROTA. Martingale MAX atingido! Pausando 3 rodadas.');
-                    }
+                // Usa saldo para calcular lucro REAL se possivel
+                let profit;
+                if (state.balanceBeforeBet > 0 && betWasPlaced) {
+                    profit = balanceDiff; // Lucro real baseado no saldo
+                    console.log('[BotBlaze] Saldo: R$' + state.balanceBeforeBet.toFixed(2) +
+                        ' -> R$' + balanceAfter.toFixed(2) + ' (real: ' + (profit >= 0 ? '+' : '') + 'R$' + profit.toFixed(2) + ')');
                 } else {
-                    console.log('[BotBlaze] DERROTA. -R$' + Math.abs(profit).toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+                    // Fallback: calculo teorico
+                    const multiplier = COLOR_MULTIPLIERS[color] || 2;
+                    profit = won
+                        ? state.currentBetAmount * (multiplier - 1)
+                        : -state.currentBetAmount;
                 }
-            }
 
-            // Registra no backend (usa nivel no momento da aposta, nao apos alteracao)
-            sendMessage({
-                action: 'recordBet',
-                payload: {
-                    game_id: 'blaze_double_' + Date.now(),
-                    color_bet: state.currentBetColor,
-                    color_bet_name: COLOR_NAMES[state.currentBetColor],
-                    amount: state.currentBetAmount,
-                    result: won ? 'win' : 'loss',
-                    profit: profit,
-                    roll_result: color,
-                    roll_result_name: COLOR_NAMES[color],
-                    was_martingale: mgLevelAtBet > 0 ? 1 : 0,
-                    martingale_level: mgLevelAtBet,
-                    session_profit: state.sessionProfit,
-                    timestamp: new Date().toISOString()
+                // Determina win/loss pelo saldo (mais preciso que comparar cores)
+                const realWon = betWasPlaced ? (balanceDiff > 0) : won;
+
+                // Salva nivel antes de alterar (para registrar corretamente)
+                const mgLevelAtBet = state.martingaleLevel;
+
+                state.sessionProfit += profit;
+
+                if (realWon) {
+                    state.sessionWins++;
+                    state.martingaleLevel = 0;
+                    state.lastBetResult = 'win';
+                    state._mgCooldown = 0; // Win limpa cooldown
+                    console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+                } else {
+                    state.sessionLosses++;
+                    state.lastBetResult = 'loss';
+
+                    const mgEnabled = (
+                        state.settings &&
+                        (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1)
+                    );
+
+                    if (mgEnabled) {
+                        const maxLevel = parseInt(state.settings.martingale_max) || 3;
+                        if (state.martingaleLevel < maxLevel) {
+                            state.martingaleLevel++;
+                            console.log('[BotBlaze] DERROTA. Martingale -> nv ' + state.martingaleLevel);
+                        } else {
+                            state.martingaleLevel = 0;
+                            state.lastBetColor = null; // Limpa cor pra nao repetir
+                            state._mgCooldown = 3; // Pula 3 rodadas antes de apostar de novo
+                            console.log('[BotBlaze] DERROTA. Martingale MAX atingido! Pausando 3 rodadas.');
+                        }
+                    } else {
+                        console.log('[BotBlaze] DERROTA. -R$' + Math.abs(profit).toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+                    }
                 }
-            });
 
-            state.waitingResult = false;
-            state.currentBetColor = null;
-            state.currentBetAmount = 0;
+                // Registra no backend (usa nivel no momento da aposta, nao apos alteracao)
+                sendMessage({
+                    action: 'recordBet',
+                    payload: {
+                        game_id: 'blaze_double_' + Date.now(),
+                        color_bet: state.currentBetColor,
+                        color_bet_name: COLOR_NAMES[state.currentBetColor],
+                        amount: state.currentBetAmount,
+                        result: realWon ? 'win' : 'loss',
+                        profit: profit,
+                        roll_result: color,
+                        roll_result_name: COLOR_NAMES[color],
+                        was_martingale: mgLevelAtBet > 0 ? 1 : 0,
+                        martingale_level: mgLevelAtBet,
+                        session_profit: state.sessionProfit,
+                        balance_before: state.balanceBeforeBet,
+                        balance_after: balanceAfter,
+                        timestamp: new Date().toISOString()
+                    }
+                });
 
-            // Persiste estatisticas para sobreviver a recarregamentos
-            saveSessionStats();
+                state.waitingResult = false;
+                state.currentBetColor = null;
+                state.currentBetAmount = 0;
 
-            // Se a fase atual ja e 'betting', agenda o martingale/proxima aposta
-            // (corrige race condition: onBettingPhase foi chamado antes do resultado ser processado)
-            if (state.botActive && state.gamePhase === 'betting') {
-                setTimeout(() => {
-                    onBettingPhase();
-                }, 800);
-            }
+                // Persiste estatisticas para sobreviver a recarregamentos
+                saveSessionStats();
+
+                // Se a fase atual ja e 'betting', agenda o martingale/proxima aposta
+                // (corrige race condition: onBettingPhase foi chamado antes do resultado ser processado)
+                if (state.botActive && state.gamePhase === 'betting') {
+                    setTimeout(() => {
+                        onBettingPhase();
+                    }, 800);
+                }
+            } // fim do else (aposta efetivada)
         }
 
         updateOverlay();
