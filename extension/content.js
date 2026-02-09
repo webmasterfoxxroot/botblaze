@@ -479,8 +479,13 @@
                         text.includes('aposte agora') || text.includes('waiting')) {
                         return 'betting';
                     }
+                    // "Girando Em X:XX" = countdown = still BETTING phase
+                    // "Girando" alone (without "em") = actually spinning
                     if (text.includes('girando') || text.includes('rolling') ||
                         text.includes('spinning')) {
+                        if (/girando\s+em\s+\d/i.test(text) || /comecar/i.test(text)) {
+                            return 'betting';
+                        }
                         return 'spinning';
                     }
                     if (text.includes('girou') || text.includes('resultado')) {
@@ -498,7 +503,8 @@
             const text = (btn.textContent || '').toLowerCase().trim();
             if (text.includes('esperando') || text.includes('aguardando') ||
                 text.includes('aposte agora') || text === 'apostar' ||
-                text.includes('place your bet')) {
+                text.includes('place your bet') || text.includes('comecar o jogo') ||
+                text.includes('começar o jogo')) {
                 return 'betting';
             }
         }
@@ -517,7 +523,12 @@
                 const text = (area.textContent || '').toLowerCase();
 
                 if (text.includes('esperando') || text.includes('aguardando apostas') ||
-                    text.includes('aposte agora') || text.includes('waiting for bets')) {
+                    text.includes('aposte agora') || text.includes('waiting for bets') ||
+                    text.includes('comecar o jogo') || text.includes('começar o jogo')) {
+                    return 'betting';
+                }
+                // "girando em X:XX" = countdown = betting phase still
+                if (/girando\s+em\s+\d/i.test(text)) {
                     return 'betting';
                 }
                 if (text.includes('girando...') || text.includes('rolling') ||
@@ -533,7 +544,12 @@
         // Estrategia 4: Scan amplo (toda a pagina, limitado a 10KB)
         const bodyText = (document.body.innerText || '').toLowerCase().substring(0, 10000);
 
-        if (bodyText.includes('esperando') || bodyText.includes('aguardando')) {
+        if (bodyText.includes('esperando') || bodyText.includes('aguardando') ||
+            bodyText.includes('comecar o jogo')) {
+            return 'betting';
+        }
+        // "girando em X:XX" countdown = still betting
+        if (/girando\s+em\s+\d/.test(bodyText)) {
             return 'betting';
         }
         if (bodyText.includes('girando...')) {
@@ -702,15 +718,14 @@
             counts[s.color]++;
         });
 
-        // Encontra a cor com mais votos ponderados
+        // Encontra a cor com mais votos ponderados (empate = aleatorio)
+        const maxVotes = Math.max(votes[COLOR_RED], votes[COLOR_BLACK], votes[COLOR_WHITE]);
+        let bestVotes = maxVotes;
         let bestColor = null;
-        let bestVotes = 0;
 
-        for (const c of [COLOR_RED, COLOR_BLACK, COLOR_WHITE]) {
-            if (votes[c] > bestVotes) {
-                bestVotes = votes[c];
-                bestColor = c;
-            }
+        if (maxVotes > 0) {
+            const winners = [COLOR_RED, COLOR_BLACK, COLOR_WHITE].filter(c => votes[c] === maxVotes);
+            bestColor = winners.length === 1 ? winners[0] : winners[Math.floor(Math.random() * winners.length)];
         }
 
         if (bestColor === null) {
@@ -1433,8 +1448,8 @@
             return;
         }
 
-        // Delay aleatorio para parecer natural (1.5-4.5s)
-        const delay = 1500 + Math.random() * 3000;
+        // Delay aleatorio curto para apostar rapido durante o countdown (0.5-1.5s)
+        const delay = 500 + Math.random() * 1000;
         console.log('[BotBlaze] Apostando em ' + (delay / 1000).toFixed(1) + 's: ' + COLOR_NAMES[color] + ' R$' + amount.toFixed(2));
 
         setTimeout(() => {
@@ -1720,7 +1735,12 @@
                 </div>
                 <div class="bb-stat-row">
                     <span class="bb-stat-label">Martingale</span>
-                    <span id="bb-mg">${state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel : 'Desligado'}</span>
+                    <span id="bb-mg">${(() => {
+                        const mgOn = state.settings && (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
+                        if (!mgOn) return 'Desligado';
+                        const maxMg = (state.settings && state.settings.martingale_max) || 3;
+                        return state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel + '/' + maxMg : 'Ativado (max ' + maxMg + ')';
+                    })()}</span>
                 </div>
                 <div class="bb-stat-row">
                     <span class="bb-stat-label">Ultima Aposta</span>
@@ -1850,7 +1870,13 @@
             ids.phase.textContent = PHASE_NAMES[state.gamePhase] || state.gamePhase;
         }
         if (ids.mg) {
-            ids.mg.textContent = state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel : 'Desligado';
+            const mgOn = state.settings && (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
+            if (!mgOn) {
+                ids.mg.textContent = 'Desligado';
+            } else {
+                const maxMg = (state.settings && state.settings.martingale_max) || 3;
+                ids.mg.textContent = state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel + '/' + maxMg : 'Ativado (max ' + maxMg + ')';
+            }
         }
         if (ids.lastBet) {
             if (state.waitingResult && state.currentBetColor !== null) {
