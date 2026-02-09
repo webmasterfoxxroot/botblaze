@@ -148,22 +148,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.disabled = true;
         btn.textContent = 'Salvando...';
 
-        const result = await sendMessage({ action: 'saveSettings', payload: settings });
+        // Salva direto no chrome.storage.local (no computador do cliente)
+        await chrome.storage.local.set({ bot_settings: settings });
 
-        if (result.success) {
-            msgEl.textContent = result.warning ? 'Salvo localmente!' : 'Salvo!';
-            msgEl.className = 'save-msg save-success';
-            msgEl.style.display = 'inline';
-            setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
+        msgEl.textContent = 'Salvo!';
+        msgEl.className = 'save-msg save-success';
+        msgEl.style.display = 'inline';
+        setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
 
-            // Notifica o content script para atualizar as settings em tempo real
-            notifyContentScript({ action: 'updateSettings', settings: settings });
-        } else {
-            msgEl.textContent = 'Erro ao salvar';
-            msgEl.className = 'save-msg save-error';
-            msgEl.style.display = 'inline';
-            setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
-        }
+        // Notifica o content script para atualizar as settings em tempo real
+        notifyContentScript({ action: 'updateSettings', settings: settings });
+
+        // Tenta sincronizar com o servidor (nao bloqueia)
+        sendMessage({ action: 'saveSettings', payload: settings }).catch(() => {});
 
         btn.disabled = false;
         btn.textContent = 'Salvar Configuracoes';
@@ -300,8 +297,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             subEl.className = 'badge badge-red';
         }
 
-        // Carrega configuracoes no formulario
-        const s = data.settings || {};
+        // Carrega configuracoes direto do chrome.storage.local (salvas no computador)
+        const store = await chrome.storage.local.get(['bot_settings']);
+        const s = store.bot_settings || data.settings || {};
+
         document.getElementById('cfg-bet-amount').value = formatBRL(s.bet_amount || 2);
         document.getElementById('cfg-strategy').value = s.strategy || 'moderado';
         document.getElementById('cfg-min-confidence').value = s.min_confidence || 60;
