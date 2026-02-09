@@ -6,13 +6,26 @@
     <title>Admin - BotBlaze</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* ── FILTER TABS ──────────────────────────────────── */
-        .tabs { display: flex; gap: 4px; padding: 4px; background: rgba(255,255,255,.04); border-radius: 10px; margin-bottom: 20px; overflow-x: auto; }
-        .tab { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 500; transition: all .2s; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .tab:hover { color: var(--text); background: rgba(255,255,255,.04); }
-        .tab.active { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(231,76,60,.3); }
-        .tab-count { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,.15); }
-        .tab.active .tab-count { background: rgba(255,255,255,.25); }
+        /* ── FILTER DROPDOWN ─────────────────────────────── */
+        .filter-dropdown { position: relative; }
+        .filter-btn { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text); cursor: pointer; font-size: 14px; font-weight: 500; transition: all .2s; min-width: 200px; }
+        .filter-btn:hover { border-color: rgba(255,255,255,.15); }
+        .filter-btn.open { border-color: var(--accent); }
+        .filter-btn-label { flex: 1; text-align: left; }
+        .filter-btn-count { font-size: 12px; padding: 2px 8px; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; min-width: 22px; text-align: center; }
+        .filter-btn-arrow { transition: transform .2s; opacity: .5; }
+        .filter-btn.open .filter-btn-arrow { transform: rotate(180deg); }
+        .filter-menu { display: none; position: absolute; left: 0; top: calc(100% + 6px); background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 6px; min-width: 220px; z-index: 200; box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+        .filter-menu.open { display: block; animation: menuFade .15s ease; }
+        .filter-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: none; background: none; color: var(--text); cursor: pointer; font-size: 13px; width: 100%; text-align: left; transition: background .1s; }
+        .filter-option:hover { background: rgba(255,255,255,.06); }
+        .filter-option.active { background: rgba(231,76,60,.1); color: var(--accent); }
+        .filter-option svg { opacity: .4; flex-shrink: 0; }
+        .filter-option.active svg { opacity: 1; color: var(--accent); }
+        .filter-option-label { flex: 1; }
+        .filter-option-count { font-size: 11px; color: var(--text-muted); padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.06); }
+        .filter-option.active .filter-option-count { background: rgba(231,76,60,.15); color: var(--accent); }
+        .filter-sep { height: 1px; background: var(--border); margin: 4px 0; }
 
         /* ── SEARCH ───────────────────────────────────────── */
         .toolbar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
@@ -134,17 +147,56 @@
 
         <!-- Users -->
         <div class="card" style="padding: 24px;">
-            <div class="tabs" id="filter-tabs">
-                <button class="tab active" data-filter="all">Todos <span class="tab-count" id="fc-all">0</span></button>
-                <button class="tab" data-filter="admin">Admin <span class="tab-count" id="fc-admin">0</span></button>
-                <button class="tab" data-filter="user">Usuarios <span class="tab-count" id="fc-user">0</span></button>
-                <button class="tab" data-filter="active">Ativos <span class="tab-count" id="fc-active">0</span></button>
-                <button class="tab" data-filter="blocked">Bloqueados <span class="tab-count" id="fc-blocked">0</span></button>
-                <button class="tab" data-filter="with_plan">Com Plano <span class="tab-count" id="fc-with_plan">0</span></button>
-                <button class="tab" data-filter="no_plan">Sem Plano <span class="tab-count" id="fc-no_plan">0</span></button>
-            </div>
-
             <div class="toolbar">
+                <div class="filter-dropdown" id="filter-dropdown">
+                    <button class="filter-btn" id="filter-btn" onclick="toggleFilterMenu()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                        <span class="filter-btn-label" id="filter-label">Todos</span>
+                        <span class="filter-btn-count" id="filter-count">0</span>
+                        <svg class="filter-btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="filter-menu" id="filter-menu">
+                        <button class="filter-option active" data-filter="all" onclick="setFilter('all', 'Todos')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            <span class="filter-option-label">Todos</span>
+                            <span class="filter-option-count" id="fc-all">0</span>
+                        </button>
+                        <div class="filter-sep"></div>
+                        <button class="filter-option" data-filter="admin" onclick="setFilter('admin', 'Admin')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2"/><path d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.3 24.3 0 0 1 4.5 0m0 0v5.714a2.25 2.25 0 0 0 .659 1.591L19 14.5m-4.75-11.396c.251.023.501.05.75.082"/></svg>
+                            <span class="filter-option-label">Admin</span>
+                            <span class="filter-option-count" id="fc-admin">0</span>
+                        </button>
+                        <button class="filter-option" data-filter="user" onclick="setFilter('user', 'Usuarios')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            <span class="filter-option-label">Usuarios</span>
+                            <span class="filter-option-count" id="fc-user">0</span>
+                        </button>
+                        <div class="filter-sep"></div>
+                        <button class="filter-option" data-filter="active" onclick="setFilter('active', 'Ativos')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+                            <span class="filter-option-label">Ativos</span>
+                            <span class="filter-option-count" id="fc-active">0</span>
+                        </button>
+                        <button class="filter-option" data-filter="blocked" onclick="setFilter('blocked', 'Bloqueados')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+                            <span class="filter-option-label">Bloqueados</span>
+                            <span class="filter-option-count" id="fc-blocked">0</span>
+                        </button>
+                        <div class="filter-sep"></div>
+                        <button class="filter-option" data-filter="with_plan" onclick="setFilter('with_plan', 'Com Plano')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            <span class="filter-option-label">Com Plano</span>
+                            <span class="filter-option-count" id="fc-with_plan">0</span>
+                        </button>
+                        <button class="filter-option" data-filter="no_plan" onclick="setFilter('no_plan', 'Sem Plano')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            <span class="filter-option-label">Sem Plano</span>
+                            <span class="filter-option-count" id="fc-no_plan">0</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="search-wrap">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                     <input type="text" class="search-field" id="search-input" placeholder="Buscar por nome ou email...">
@@ -231,16 +283,29 @@
 
     let allUsers = [], allPlans = [], currentFilter = 'all', searchQuery = '';
 
-    // ── TABS ─────────────────────────────────────────────────────────────────
+    // ── FILTER DROPDOWN ──────────────────────────────────────────────────────
 
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentFilter = btn.dataset.filter;
-            renderUsers();
-        });
-    });
+    function toggleFilterMenu() {
+        const btn = document.getElementById('filter-btn');
+        const menu = document.getElementById('filter-menu');
+        const isOpen = menu.classList.contains('open');
+        closeAllMenus();
+        if (!isOpen) {
+            menu.classList.add('open');
+            btn.classList.add('open');
+        }
+    }
+
+    function setFilter(filter, label) {
+        currentFilter = filter;
+        document.getElementById('filter-label').textContent = label;
+        document.querySelectorAll('.filter-option').forEach(o => o.classList.toggle('active', o.dataset.filter === filter));
+        const countEl = document.getElementById('fc-' + filter);
+        document.getElementById('filter-count').textContent = countEl ? countEl.textContent : '0';
+        document.getElementById('filter-menu').classList.remove('open');
+        document.getElementById('filter-btn').classList.remove('open');
+        renderUsers();
+    }
 
     document.getElementById('search-input').addEventListener('input', (e) => {
         searchQuery = e.target.value.toLowerCase();
@@ -271,6 +336,9 @@
         document.getElementById('fc-blocked').textContent = allUsers.filter(u => u.status === 'blocked').length;
         document.getElementById('fc-with_plan').textContent = allUsers.filter(u => u.plan_name).length;
         document.getElementById('fc-no_plan').textContent = allUsers.filter(u => !u.plan_name).length;
+        // Sync filter button count
+        const countEl = document.getElementById('fc-' + currentFilter);
+        if (countEl) document.getElementById('filter-count').textContent = countEl.textContent;
     }
 
     // ── RENDER ───────────────────────────────────────────────────────────────
@@ -365,6 +433,8 @@
 
     function closeAllMenus() {
         document.querySelectorAll('.kebab-menu.open').forEach(m => m.classList.remove('open'));
+        document.getElementById('filter-menu').classList.remove('open');
+        document.getElementById('filter-btn').classList.remove('open');
     }
 
     document.addEventListener('click', closeAllMenus);
