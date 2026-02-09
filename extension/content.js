@@ -1733,68 +1733,101 @@
         } else if (!state.hasSubscription) {
             bodyContent = '<p class="bb-msg">Seu plano nao esta ativo.<br><small style="color:#666;">Assine um plano no painel e baixe a extensao configurada.</small></p>';
         } else {
+            // Helper para fase badge
+            const phaseClass = 'bb-phase-' + (state.gamePhase || 'unknown');
+
+            // Helper para confianca
+            const conf = analysis.lastConfidence || 0;
+            const confColor = conf >= 70 ? '#2ecc71' : conf >= 50 ? '#f1c40f' : '#ef4444';
+            const confLabel = conf >= 70 ? 'Alta' : conf >= 50 ? 'Media' : conf > 0 ? 'Baixa' : 'Sem dados';
+            const confBarW = conf > 0 ? conf : 0;
+
+            // Helper para sinal
+            let signalHTML = '<span style="color:#555">Aguardando...</span>';
+            if (analysis.lastDecision !== null) {
+                const sc = analysis.lastDecision === COLOR_RED ? '#ef4444' :
+                    analysis.lastDecision === COLOR_BLACK ? '#4a4a5a' : '#f1c40f';
+                signalHTML = '<span style="color:' + sc + '">' + COLOR_NAMES[analysis.lastDecision] + '</span>';
+            } else if (analysis.lastSignals && analysis.lastSignals.length > 0) {
+                signalHTML = '<span style="color:#f1c40f">Sem confianca</span>';
+            }
+
+            // Helper para martingale
+            const mgOn = state.settings && (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
+            const maxMg = (state.settings && state.settings.martingale_max) || 3;
+            let mgHTML = '';
+            if (!mgOn) {
+                mgHTML = '<span class="bb-mg-off">Desligado</span>';
+            } else if (state.martingaleLevel > 0) {
+                mgHTML = '<span class="bb-mg-active">Nv ' + state.martingaleLevel + '/' + maxMg + '</span>';
+            } else {
+                mgHTML = '<span style="color:#2ecc71">Ativado</span> <span style="color:#666;font-size:11px">(max ' + maxMg + ')</span>';
+            }
+
             bodyContent = `
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Status</span>
-                    <span id="bb-status" class="${state.botActive ? 'bb-on' : 'bb-off'}">${state.botActive ? 'ATIVO' : 'PARADO'}</span>
+                <div class="bb-signal-box" id="bb-signal-box">
+                    <div class="bb-signal-color" id="bb-signal">${signalHTML}</div>
+                    <div class="bb-signal-sub" id="bb-conf-text">${conf > 0 ? confLabel + ' ' + conf + '%' : confLabel}</div>
+                    <div class="bb-conf-bar-wrap">
+                        <div class="bb-conf-bar" id="bb-conf-bar" style="width:${confBarW}%;background:${confColor}"></div>
+                    </div>
                 </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Saldo</span>
-                    <span id="bb-balance">R$ ${state.balance.toFixed(2)}</span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Lucro Sessao</span>
-                    <span id="bb-profit" class="${state.sessionProfit >= 0 ? 'bb-green' : 'bb-red'}">R$ ${state.sessionProfit.toFixed(2)}</span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Apostas</span>
-                    <span id="bb-bets">${state.sessionBets}</span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Vitorias / Derrotas</span>
-                    <span>
-                        <span class="bb-green" id="bb-wins">${state.sessionWins}</span>
-                        /
-                        <span class="bb-red" id="bb-losses">${state.sessionLosses}</span>
-                    </span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Martingale</span>
-                    <span id="bb-mg">${(() => {
-                        const mgOn = state.settings && (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
-                        if (!mgOn) return 'Desligado';
-                        const maxMg = (state.settings && state.settings.martingale_max) || 3;
-                        return state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel + '/' + maxMg : 'Ativado (max ' + maxMg + ')';
-                    })()}</span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Ultima Aposta</span>
-                    <span id="bb-last-bet">${state.currentBetColor !== null ? COLOR_NAMES[state.currentBetColor] + ' R$' + state.currentBetAmount.toFixed(2) : '-'}</span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Fase</span>
-                    <span id="bb-phase">${PHASE_NAMES[state.gamePhase] || state.gamePhase}</span>
-                </div>
-                <div class="bb-stat-row">
-                    <span class="bb-stat-label">Historico</span>
-                    <span id="bb-history">${state.gameHistory.length} jogos</span>
-                </div>
-                <div style="border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;">
+                <div class="bb-section">
                     <div class="bb-stat-row">
-                        <span class="bb-stat-label">Sinal</span>
-                        <span id="bb-signal" style="font-weight:bold">Analisando...</span>
+                        <span class="bb-stat-label">Status</span>
+                        <span id="bb-status" class="${state.botActive ? 'bb-on' : 'bb-off'}">${state.botActive ? 'ATIVO' : 'PARADO'}</span>
                     </div>
                     <div class="bb-stat-row">
-                        <span class="bb-stat-label">Confianca</span>
-                        <span id="bb-confidence">-</span>
+                        <span class="bb-stat-label">Fase</span>
+                        <span id="bb-phase" class="bb-phase-badge ${phaseClass}">${PHASE_NAMES[state.gamePhase] || state.gamePhase}</span>
+                    </div>
+                </div>
+                <div class="bb-section">
+                    <div class="bb-section-title">FINANCEIRO</div>
+                    <div class="bb-stats-grid">
+                        <div class="bb-stat-row">
+                            <span class="bb-stat-label">Saldo</span>
+                            <span class="bb-stat-value" id="bb-balance">R$ ${state.balance.toFixed(2)}</span>
+                        </div>
+                        <div class="bb-stat-row">
+                            <span class="bb-stat-label">Lucro</span>
+                            <span class="bb-stat-value ${state.sessionProfit >= 0 ? 'bb-green' : 'bb-red'}" id="bb-profit">R$ ${state.sessionProfit.toFixed(2)}</span>
+                        </div>
+                        <div class="bb-stat-row">
+                            <span class="bb-stat-label">Apostas</span>
+                            <span class="bb-stat-value" id="bb-bets">${state.sessionBets}</span>
+                        </div>
+                        <div class="bb-stat-row">
+                            <span class="bb-stat-label">V / D</span>
+                            <span class="bb-stat-value">
+                                <span class="bb-green" id="bb-wins">${state.sessionWins}</span>
+                                <span style="color:#555"> / </span>
+                                <span class="bb-red" id="bb-losses">${state.sessionLosses}</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bb-section">
+                    <div class="bb-section-title">CONTROLE</div>
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Martingale</span>
+                        <span id="bb-mg">${mgHTML}</span>
+                    </div>
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Ultima</span>
+                        <span class="bb-stat-value" id="bb-last-bet">${state.currentBetColor !== null ? COLOR_NAMES[state.currentBetColor] + ' R$' + state.currentBetAmount.toFixed(2) : '-'}</span>
                     </div>
                     <div class="bb-stat-row">
                         <span class="bb-stat-label">Puladas</span>
-                        <span id="bb-skipped">0</span>
+                        <span class="bb-stat-value" id="bb-skipped">${analysis.roundsSkipped}</span>
                     </div>
                     <div class="bb-stat-row">
                         <span class="bb-stat-label">Branco em</span>
-                        <span id="bb-white-gap">-</span>
+                        <span class="bb-stat-value" id="bb-white-gap">-</span>
+                    </div>
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Historico</span>
+                        <span class="bb-stat-value" id="bb-history">${state.gameHistory.length} jogos</span>
                     </div>
                 </div>
             `;
@@ -1866,7 +1899,8 @@
             history:    document.getElementById('bb-history'),
             toggle:     document.getElementById('bb-toggle'),
             signal:     document.getElementById('bb-signal'),
-            confidence: document.getElementById('bb-confidence'),
+            confText:   document.getElementById('bb-conf-text'),
+            confBar:    document.getElementById('bb-conf-bar'),
             skipped:    document.getElementById('bb-skipped'),
             whiteGap:   document.getElementById('bb-white-gap')
         };
@@ -1880,7 +1914,7 @@
         }
         if (ids.profit) {
             ids.profit.textContent = 'R$ ' + state.sessionProfit.toFixed(2);
-            ids.profit.className = state.sessionProfit >= 0 ? 'bb-green' : 'bb-red';
+            ids.profit.className = 'bb-stat-value ' + (state.sessionProfit >= 0 ? 'bb-green' : 'bb-red');
         }
         if (ids.bets) {
             ids.bets.textContent = state.sessionBets;
@@ -1891,28 +1925,46 @@
         if (ids.losses) {
             ids.losses.textContent = state.sessionLosses;
         }
+
+        // Fase com badge colorido
         if (ids.phase) {
             ids.phase.textContent = PHASE_NAMES[state.gamePhase] || state.gamePhase;
+            ids.phase.className = 'bb-phase-badge bb-phase-' + (state.gamePhase || 'unknown');
         }
+
+        // Martingale com cores
         if (ids.mg) {
             const mgOn = state.settings && (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
             if (!mgOn) {
-                ids.mg.textContent = 'Desligado';
+                ids.mg.innerHTML = '<span class="bb-mg-off">Desligado</span>';
             } else {
                 const maxMg = (state.settings && state.settings.martingale_max) || 3;
-                ids.mg.textContent = state.martingaleLevel > 0 ? 'Nv ' + state.martingaleLevel + '/' + maxMg : 'Ativado (max ' + maxMg + ')';
+                if (state.martingaleLevel > 0) {
+                    ids.mg.innerHTML = '<span class="bb-mg-active">Nv ' + state.martingaleLevel + '/' + maxMg + '</span>';
+                } else {
+                    ids.mg.innerHTML = '<span style="color:#2ecc71">Ativado</span> <span style="color:#666;font-size:11px">(max ' + maxMg + ')</span>';
+                }
             }
         }
+
+        // Ultima aposta
         if (ids.lastBet) {
             if (state.waitingResult && state.currentBetColor !== null) {
-                ids.lastBet.textContent = COLOR_NAMES[state.currentBetColor] + ' R$' + state.currentBetAmount.toFixed(2) + ' (aguardando)';
+                const betColor = state.currentBetColor === COLOR_RED ? '#ef4444' :
+                    state.currentBetColor === COLOR_BLACK ? '#9ca3af' : '#f1c40f';
+                ids.lastBet.innerHTML = '<span style="color:' + betColor + '">' + COLOR_NAMES[state.currentBetColor] + '</span> R$' + state.currentBetAmount.toFixed(2) + ' <span style="color:#f1c40f;font-size:11px">aguardando</span>';
             } else if (state.sessionBets > 0) {
                 const lastWon = state.sessionWins > 0 && (state.sessionProfit >= 0);
-                ids.lastBet.textContent = lastWon ? 'Ultima: Vitoria' : 'Ultima: Derrota';
+                if (lastWon) {
+                    ids.lastBet.innerHTML = '<span class="bb-green">Vitoria</span>';
+                } else {
+                    ids.lastBet.innerHTML = '<span class="bb-red">Derrota</span>';
+                }
             } else {
-                ids.lastBet.textContent = '-';
+                ids.lastBet.innerHTML = '<span style="color:#555">-</span>';
             }
         }
+
         if (ids.history) {
             ids.history.textContent = state.gameHistory.length + ' jogos';
         }
@@ -1920,31 +1972,37 @@
             ids.toggle.checked = state.botActive;
         }
 
-        // --- Campos de analise inteligente ---
+        // --- Sinal principal (signal box) ---
         if (ids.signal) {
             if (analysis.lastDecision !== null) {
-                const colorEmoji = analysis.lastDecision === COLOR_RED ? '\u25CF' :
-                    analysis.lastDecision === COLOR_BLACK ? '\u25CF' : '\u25CB';
-                const colorStyle = analysis.lastDecision === COLOR_RED ? 'color:#ef4444' :
-                    analysis.lastDecision === COLOR_BLACK ? 'color:#6b7280' : 'color:#fbbf24';
-                ids.signal.innerHTML = '<span style="' + colorStyle + '">' + colorEmoji + '</span> ' + COLOR_NAMES[analysis.lastDecision];
-            } else if (analysis.lastSignals.length > 0) {
-                ids.signal.textContent = 'Sem confianca';
-                ids.signal.style.color = '#fbbf24';
+                const sc = analysis.lastDecision === COLOR_RED ? '#ef4444' :
+                    analysis.lastDecision === COLOR_BLACK ? '#4a4a5a' : '#f1c40f';
+                ids.signal.innerHTML = '<span style="color:' + sc + '">' + COLOR_NAMES[analysis.lastDecision] + '</span>';
+            } else if (analysis.lastSignals && analysis.lastSignals.length > 0) {
+                ids.signal.innerHTML = '<span style="color:#f1c40f">Sem confianca</span>';
             } else {
-                ids.signal.textContent = 'Sem sinal';
-                ids.signal.style.color = '#9ca3af';
+                ids.signal.innerHTML = '<span style="color:#555">Aguardando...</span>';
             }
         }
-        if (ids.confidence) {
-            const conf = analysis.lastConfidence;
+
+        // --- Barra de confianca ---
+        const conf = analysis.lastConfidence || 0;
+        const confColor = conf >= 70 ? '#2ecc71' : conf >= 50 ? '#f1c40f' : '#ef4444';
+        const confLabel = conf >= 70 ? 'Alta' : conf >= 50 ? 'Media' : conf > 0 ? 'Baixa' : 'Sem dados';
+
+        if (ids.confText) {
             if (conf > 0) {
-                const confColor = conf >= 70 ? '#22c55e' : conf >= 55 ? '#fbbf24' : '#ef4444';
-                ids.confidence.innerHTML = '<span style="color:' + confColor + '">' + conf + '%</span>';
+                ids.confText.innerHTML = '<span style="color:' + confColor + '">' + confLabel + ' ' + conf + '%</span>';
             } else {
-                ids.confidence.textContent = '-';
+                ids.confText.innerHTML = '<span style="color:#555">' + confLabel + '</span>';
             }
         }
+        if (ids.confBar) {
+            ids.confBar.style.width = (conf > 0 ? conf : 0) + '%';
+            ids.confBar.style.background = conf > 0 ? confColor : 'transparent';
+        }
+
+        // --- Estatisticas de analise ---
         if (ids.skipped) {
             ids.skipped.textContent = analysis.roundsSkipped;
         }
@@ -1952,8 +2010,8 @@
             const gap = analysis.roundsSinceWhite;
             const avg = Math.round(analysis.avgWhiteInterval);
             const ratio = avg > 0 ? gap / avg : 0;
-            const gapColor = ratio >= 1.5 ? '#ef4444' : ratio >= 1.0 ? '#fbbf24' : '#9ca3af';
-            ids.whiteGap.innerHTML = '<span style="color:' + gapColor + '">' + gap + '</span> <small>(media ' + avg + ')</small>';
+            const gapColor = ratio >= 1.5 ? '#ef4444' : ratio >= 1.0 ? '#f1c40f' : '#9ca3af';
+            ids.whiteGap.innerHTML = '<span style="color:' + gapColor + '">' + gap + '</span> <small style="color:#666">(media ' + avg + ')</small>';
         }
     }
 

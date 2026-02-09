@@ -11,18 +11,18 @@
     top: 16px;
     right: 16px;
     z-index: 999999;
-    width: 260px;
+    width: 280px;
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
     font-size: 13px;
     color: #e0e0e0;
-    background: rgba(18, 18, 36, 0.96);
-    border: 1px solid rgba(230, 57, 70, 0.4);
-    border-radius: 10px;
+    background: rgba(14, 14, 30, 0.97);
+    border: 1px solid rgba(230, 57, 70, 0.35);
+    border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 12px rgba(230, 57, 70, 0.15);
     overflow: hidden;
     user-select: none;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     transition: box-shadow 0.3s ease;
 }
 
@@ -145,7 +145,102 @@
 /* ---------- Body ---------- */
 
 #botblaze-overlay .bb-body {
-    padding: 10px 14px 14px;
+    padding: 0;
+}
+
+/* ---------- Sections ---------- */
+
+#botblaze-overlay .bb-section {
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#botblaze-overlay .bb-section:last-child {
+    border-bottom: none;
+}
+
+#botblaze-overlay .bb-section-title {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #666;
+    margin-bottom: 6px;
+}
+
+/* ---------- Signal Box (destaque) ---------- */
+
+#botblaze-overlay .bb-signal-box {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    text-align: center;
+}
+
+#botblaze-overlay .bb-signal-color {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1.3;
+}
+
+#botblaze-overlay .bb-signal-sub {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+}
+
+/* ---------- Confidence Bar ---------- */
+
+#botblaze-overlay .bb-conf-bar-wrap {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+#botblaze-overlay .bb-conf-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease, background 0.3s ease;
+    min-width: 0;
+}
+
+/* ---------- Phase Badge ---------- */
+
+#botblaze-overlay .bb-phase-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+#botblaze-overlay .bb-phase-betting {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+#botblaze-overlay .bb-phase-spinning {
+    background: rgba(241, 196, 15, 0.15);
+    color: #f1c40f;
+    border: 1px solid rgba(241, 196, 15, 0.3);
+}
+
+#botblaze-overlay .bb-phase-result {
+    background: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+#botblaze-overlay .bb-phase-unknown {
+    background: rgba(155, 155, 155, 0.15);
+    color: #999;
+    border: 1px solid rgba(155, 155, 155, 0.3);
 }
 
 /* ---------- Stat Rows ---------- */
@@ -154,24 +249,31 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 4px 0;
 }
 
-#botblaze-overlay .bb-stat-row:last-child {
-    border-bottom: none;
-}
-
-#botblaze-overlay .bb-stat-label,
-#botblaze-overlay .bb-stat-row span:first-child {
-    color: #999;
+#botblaze-overlay .bb-stat-label {
+    color: #888;
     font-size: 12px;
     font-weight: 400;
 }
 
-#botblaze-overlay .bb-stat-row span:last-child {
+#botblaze-overlay .bb-stat-value {
     font-weight: 600;
     font-size: 13px;
+    color: #e0e0e0;
+}
+
+/* ---------- Stats Grid (compact) ---------- */
+
+#botblaze-overlay .bb-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+}
+
+#botblaze-overlay .bb-stats-grid .bb-stat-row {
+    padding: 3px 0;
 }
 
 /* ---------- Status Colors ---------- */
@@ -197,13 +299,34 @@
     font-weight: 700;
 }
 
+#botblaze-overlay .bb-yellow {
+    color: #f1c40f;
+    font-weight: 700;
+}
+
+#botblaze-overlay .bb-muted {
+    color: #666;
+}
+
+/* ---------- MG Level indicator ---------- */
+
+#botblaze-overlay .bb-mg-active {
+    color: #f39c12;
+    font-weight: 700;
+    text-shadow: 0 0 4px rgba(243, 156, 18, 0.3);
+}
+
+#botblaze-overlay .bb-mg-off {
+    color: #555;
+}
+
 /* ---------- Message (login/subscription) ---------- */
 
 #botblaze-overlay .bb-msg {
     color: #aaa;
     font-size: 12px;
     text-align: center;
-    padding: 12px 4px;
+    padding: 16px 8px;
     margin: 0;
     line-height: 1.5;
 }
@@ -212,7 +335,7 @@
 
 @media (max-width: 480px) {
     #botblaze-overlay {
-        width: 220px;
+        width: 240px;
         font-size: 12px;
         top: 8px;
         right: 8px;
@@ -222,11 +345,15 @@
         padding: 8px 10px;
     }
 
-    #botblaze-overlay .bb-body {
-        padding: 8px 10px 10px;
+    #botblaze-overlay .bb-section {
+        padding: 6px 10px;
     }
 
     #botblaze-overlay .bb-logo {
         font-size: 13px;
+    }
+
+    #botblaze-overlay .bb-signal-color {
+        font-size: 18px;
     }
 }
