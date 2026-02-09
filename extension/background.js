@@ -330,7 +330,30 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
         console.log('[BotBlaze] Extensao instalada com sucesso.');
 
-        // Configura valores padrao
+        // Tenta auto-configurar a partir do config.json embutido no pacote
+        try {
+            const res = await fetch(chrome.runtime.getURL('config.json'));
+            if (res.ok) {
+                const config = await res.json();
+                if (config.api_token && config.user) {
+                    await storageSet({
+                        api_url: config.api_url || DEFAULT_API,
+                        api_token: config.api_token,
+                        user: config.user,
+                        subscription: config.subscription || null,
+                        is_authenticated: true,
+                        bot_settings: getDefaultSettings()
+                    });
+                    console.log('[BotBlaze] Auto-configurado com sucesso! Usuario: ' + config.user.name);
+                    return;
+                }
+            }
+        } catch (e) {
+            // config.json nao encontrado - instalacao manual, usa defaults
+            console.log('[BotBlaze] Sem config.json embutido. Configuracao manual necessaria.');
+        }
+
+        // Fallback: configuracoes padrao (usuario precisara fazer login)
         await storageSet({
             api_url: DEFAULT_API,
             bot_settings: getDefaultSettings()

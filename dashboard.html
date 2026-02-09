@@ -84,12 +84,32 @@
         .empty-hist p { font-size: 14px; }
 
         /* ── EXTENSION CARD ──────────────────────────────── */
-        .ext-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .ext-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; position: relative; overflow: hidden; }
+        .ext-card-locked { opacity: .7; }
+        .ext-card-locked::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.3); border-radius: 12px; pointer-events: none; }
+
+        .ext-download-area { display: flex; align-items: center; gap: 20px; margin-top: 20px; padding: 20px; background: linear-gradient(135deg, rgba(46,204,113,.06), rgba(46,204,113,.02)); border: 1px solid rgba(46,204,113,.15); border-radius: 12px; }
+        .ext-download-icon { width: 56px; height: 56px; border-radius: 14px; background: rgba(46,204,113,.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .ext-download-info { flex: 1; min-width: 0; }
+        .ext-download-info h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: var(--text); }
+        .ext-download-info p { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+        .ext-download-btn { padding: 12px 24px; border-radius: 10px; border: none; background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; cursor: pointer; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; transition: all .2s; flex-shrink: 0; box-shadow: 0 4px 16px rgba(46,204,113,.25); }
+        .ext-download-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(46,204,113,.35); }
+        .ext-download-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+        .ext-download-btn svg { width: 18px; height: 18px; }
+
         .ext-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
         .ext-step { background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
         .ext-step-num { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
         .ext-step p { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
         .ext-step strong { color: var(--text); }
+
+        .ext-locked-msg { display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 18px 20px; background: rgba(210,153,34,.06); border: 1px solid rgba(210,153,34,.15); border-radius: 12px; }
+        .ext-locked-icon { width: 44px; height: 44px; border-radius: 12px; background: rgba(210,153,34,.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #d29922; }
+        .ext-locked-text { flex: 1; }
+        .ext-locked-text p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+        .ext-locked-text a { color: #d29922; font-weight: 600; text-decoration: none; }
+        .ext-locked-text a:hover { text-decoration: underline; }
 
         .token-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; }
         .token-row code { flex: 1; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -191,33 +211,65 @@
             </table>
         </div>
 
-        <!-- Extension Install -->
-        <div class="ext-card" id="ext-card" style="display:none;">
+        <!-- Extension Section -->
+        <div class="ext-card" id="ext-card">
             <div class="section-head" style="margin-bottom:0;">
                 <h2>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2H7a5 5 0 0 0-5 5v10a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5Z"/><path d="M12 8v8m-4-4h8"/></svg>
                     Extensao Chrome
                 </h2>
-                <span style="font-size:12px; color:var(--text-muted);">v1.0.0</span>
+                <span id="ext-version" style="font-size:12px; color:var(--text-muted);">v1.0.0</span>
             </div>
-            <div class="ext-steps">
-                <div class="ext-step">
-                    <div class="ext-step-num">1</div>
-                    <p>Baixe a pasta <strong>extension/</strong> do projeto</p>
+
+            <!-- Area de download (visivel apenas com plano ativo) -->
+            <div id="ext-active-area" style="display:none;">
+                <div class="ext-download-area">
+                    <div class="ext-download-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </div>
+                    <div class="ext-download-info">
+                        <h4>Baixar Extensao Personalizada</h4>
+                        <p>Sua extensao ja vem configurada com seu token e plano <strong id="ext-plan-name">---</strong> ativo. So instalar e usar!</p>
+                    </div>
+                    <button class="ext-download-btn" id="btn-download-ext" onclick="downloadExtension()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Baixar
+                    </button>
                 </div>
-                <div class="ext-step">
-                    <div class="ext-step-num">2</div>
-                    <p>Abra <strong>chrome://extensions</strong></p>
+
+                <div class="ext-steps">
+                    <div class="ext-step">
+                        <div class="ext-step-num">1</div>
+                        <p>Clique em <strong>Baixar</strong> e extraia o ZIP</p>
+                    </div>
+                    <div class="ext-step">
+                        <div class="ext-step-num">2</div>
+                        <p>Abra <strong>chrome://extensions</strong> e ative o <strong>Modo Desenvolvedor</strong></p>
+                    </div>
+                    <div class="ext-step">
+                        <div class="ext-step-num">3</div>
+                        <p>Clique <strong>Carregar sem compactacao</strong> e selecione a pasta extraida</p>
+                    </div>
                 </div>
-                <div class="ext-step">
-                    <div class="ext-step-num">3</div>
-                    <p>Ative <strong>Modo Desenvolvedor</strong> e carregue a pasta</p>
+
+                <div class="token-row">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <code id="api-token">---</code>
+                    <button onclick="copyToken()">Copiar Token</button>
                 </div>
             </div>
-            <div class="token-row">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <code id="api-token">---</code>
-                <button onclick="copyToken()">Copiar Token</button>
+
+            <!-- Area bloqueada (visivel sem plano) -->
+            <div id="ext-locked-area" style="display:none;">
+                <div class="ext-locked-msg">
+                    <div class="ext-locked-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <div class="ext-locked-text">
+                        <p>A extensao Chrome so fica disponivel com um <strong>plano ativo</strong>. Assine e receba sua extensao personalizada, ja configurada com seu acesso.</p>
+                        <a href="index.html#plans">Ver Planos &rarr;</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -259,6 +311,40 @@
         if (t && t !== '---') {
             navigator.clipboard.writeText(t).then(() => showToast('Token copiado!'));
         }
+    }
+
+    function downloadExtension() {
+        const btn = document.getElementById('btn-download-ext');
+        btn.disabled = true;
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M2 12l10 10 10-10"/></svg> Baixando...';
+
+        // Faz download via fetch para incluir o token de autenticacao
+        fetch(API_URL + '/extension.php', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Erro ao baixar extensao');
+            return res.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'BotBlaze-Extension.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showToast('Extensao baixada com sucesso!');
+        })
+        .catch(err => {
+            console.error('Erro download:', err);
+            showToast('Erro ao baixar extensao');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Baixar';
+        });
     }
 
     function showToast(msg) {
@@ -321,6 +407,9 @@
     // ── RENDER SUBSCRIPTION ─────────────────────────────────────────────────────
     function renderSubscription(subData) {
         const card = document.getElementById('sub-card');
+        const extActiveArea = document.getElementById('ext-active-area');
+        const extLockedArea = document.getElementById('ext-locked-area');
+
         if (subData.subscription) {
             const s = subData.subscription;
             const days = s.days_remaining;
@@ -334,7 +423,15 @@
                 </div>
                 <span class="sub-badge sub-badge-active">Ativo</span>
             </div>`;
-            document.getElementById('ext-card').style.display = '';
+
+            // Mostra area de download da extensao
+            extActiveArea.style.display = '';
+            extLockedArea.style.display = 'none';
+            document.getElementById('ext-card').classList.remove('ext-card-locked');
+
+            // Atualiza nome do plano no card de download
+            const planEl = document.getElementById('ext-plan-name');
+            if (planEl) planEl.textContent = s.plan_name;
         } else {
             card.innerHTML = `<div class="sub-card sub-card-none">
                 <div class="sub-icon sub-icon-none">
@@ -346,7 +443,11 @@
                 </div>
                 <a href="index.html#plans" class="btn btn-primary btn-sm">Ver Planos</a>
             </div>`;
-            document.getElementById('ext-card').style.display = 'none';
+
+            // Mostra area bloqueada da extensao
+            extActiveArea.style.display = 'none';
+            extLockedArea.style.display = '';
+            document.getElementById('ext-card').classList.add('ext-card-locked');
         }
 
         if (subData.api_token) {

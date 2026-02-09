@@ -1039,9 +1039,9 @@
         let bodyContent = '';
 
         if (!state.authenticated) {
-            bodyContent = '<p class="bb-msg">Faca login na extensao BotBlaze para comecar.</p>';
+            bodyContent = '<p class="bb-msg">Faca login na extensao BotBlaze para comecar.<br><small style="color:#666;">Baixe a extensao configurada no seu painel.</small></p>';
         } else if (!state.hasSubscription) {
-            bodyContent = '<p class="bb-msg">Assine um plano para usar o bot automatico.</p>';
+            bodyContent = '<p class="bb-msg">Seu plano nao esta ativo.<br><small style="color:#666;">Assine um plano no painel e baixe a extensao configurada.</small></p>';
         } else {
             bodyContent = `
                 <div class="bb-stat-row">
