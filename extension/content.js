@@ -1170,12 +1170,38 @@
             setTimeout(() => {
                 const confirmBtn = findConfirmButton();
                 if (confirmBtn) {
+                    // Tenta click normal + dispatchEvent para garantir
                     simulateClick(confirmBtn);
-                    console.log('[BotBlaze] Clicou em "Comecar o jogo" - Aposta confirmada!');
+                    console.log('[BotBlaze] Clicou em "Comecar o jogo" - tag=' + confirmBtn.tagName +
+                        ' class=' + (confirmBtn.className || '').toString().substring(0, 50) +
+                        ' text=' + (confirmBtn.textContent || '').trim().substring(0, 30));
+
+                    // Fallback: se click nao funcionou, tenta novamente apos 400ms
+                    setTimeout(() => {
+                        // Verifica se ainda esta na fase de aposta (se nao processou)
+                        const phase = detectGamePhase();
+                        if (phase === 'betting' && state.waitingResult) {
+                            const btn2 = findConfirmButton();
+                            if (btn2) {
+                                btn2.click();
+                                console.log('[BotBlaze] Retry click no confirm button');
+                            }
+                        }
+                    }, 400);
                 } else {
-                    console.warn('[BotBlaze] Botao "Comecar o jogo" NAO encontrado! Aposta pode nao ter sido enviada.');
+                    console.warn('[BotBlaze] Botao "Comecar o jogo" NAO encontrado! Tentando .place-bet button direto...');
+                    // Tentativa direta de emergencia
+                    try {
+                        const emergency = document.querySelector('.place-bet button') ||
+                                          document.querySelector('[class*="place-bet"] button') ||
+                                          document.querySelector('button[class*="shared-button"]');
+                        if (emergency) {
+                            emergency.click();
+                            console.log('[BotBlaze] Emergencia: clicou em ' + (emergency.textContent || '').trim().substring(0, 30));
+                        }
+                    } catch (e) {}
                 }
-            }, 500);
+            }, 700);
         }, 300);
 
         // Atualiza estado
@@ -1295,10 +1321,13 @@
             const dc = btn.getAttribute('data-color') || btn.getAttribute('data-value') || '';
             const style = (btn.getAttribute('style') || '').toLowerCase();
 
-            // Ignora botoes que nao sao de aposta (depositar, sacar, menu, etc)
+            // Ignora botoes que nao sao de selecao de cor
             if (text.includes('depositar') || text.includes('sacar') || text.includes('deposit') ||
                 text.includes('withdraw') || text.includes('entrar') || text.includes('login') ||
-                text.includes('cadastr') || text.includes('menu') || text.includes('saldo')) return;
+                text.includes('cadastr') || text.includes('menu') || text.includes('saldo') ||
+                text.includes('começar') || text.includes('comecar') || text.includes('start') ||
+                text.includes('confirmar') || text.includes('apostar') || text.includes('place bet') ||
+                cls.includes('shared-button') || cls.includes('place-bet')) return;
 
             let score = 0;
 
@@ -1397,57 +1426,79 @@
      * Encontra o botao de confirmar aposta ("Começar o jogo" na Blaze).
      */
     function findConfirmButton() {
-        // 1. Seletores CSS especificos
-        const selectors = [
-            'button[class*="confirm"]',
-            'button[class*="place-bet"]',
-            'button[class*="apostar"]',
-            'button[class*="submit-bet"]',
-            'button[class*="make-bet"]',
-            'button[class*="bet-button"]',
-            'button[class*="enter"]',
-            'button[class*="start"]',
-            'a[class*="enter"]',
-            'a[class*="start"]',
-            '[class*="bet"] button',
-            '[class*="bet"] a'
-        ];
+        // Palavras-chave do botao de confirmar aposta
+        const confirmTexts = ['começar o jogo', 'comecar o jogo', 'começar', 'comecar',
+            'apostar', 'confirmar', 'place bet', 'start game'];
+        // Palavras que indicam que NAO e o botao de confirmar
+        const excludeTexts = ['depositar', 'sacar', 'deposit', 'withdraw', 'menu',
+            'x2', 'x14', 'vermelho', 'preto', 'branco', 'red', 'black', 'white',
+            'normal', 'auto', 'entrar', 'login', 'cadastr'];
 
-        for (const sel of selectors) {
-            try {
-                const el = document.querySelector(sel);
-                if (el && !el.disabled && el.offsetParent !== null) {
-                    const text = (el.textContent || '').toLowerCase();
-                    // Ignora botoes que nao sao de aposta
-                    if (!text.includes('depositar') && !text.includes('sacar')) {
-                        console.log('[BotBlaze] findConfirmButton: via seletor ' + sel);
-                        return el;
-                    }
-                }
-            } catch (e) {}
+        function isConfirmText(text) {
+            for (const ct of confirmTexts) {
+                if (text.includes(ct)) return true;
+            }
+            return false;
         }
 
-        // 2. Busca QUALQUER elemento visivel com texto de confirmacao
-        // (a Blaze usa tags variadas: button, a, div, span)
-        const allElements = document.querySelectorAll('button, a, div[class*="btn"], div[class*="button"], span[class*="btn"], [role="button"]');
+        function isExcludedText(text) {
+            // Texto so com cor/multiplicador = nao e confirm
+            for (const et of excludeTexts) {
+                if (text === et) return true;
+            }
+            return false;
+        }
+
+        // 1. Seletor direto para Blaze: .place-bet button (mais especifico)
+        try {
+            const el = document.querySelector('.place-bet button, div.place-bet button');
+            if (el && !el.disabled && el.offsetParent !== null) {
+                const text = (el.textContent || '').toLowerCase().trim();
+                if (text.length > 2 && text.length < 50) {
+                    console.log('[BotBlaze] findConfirmButton: .place-bet button "' + text.substring(0, 30) + '"');
+                    return el;
+                }
+            }
+        } catch (e) {}
+
+        // 2. Busca por TEXTO (mais confiavel que CSS class)
+        const allElements = document.querySelectorAll(
+            'button, a, div[class*="btn"], div[class*="button"], span[class*="btn"], ' +
+            '[role="button"], [class*="place-bet"], [class*="shared-button"]'
+        );
         for (const el of allElements) {
             if (!el.offsetParent) continue;
+            if (el.disabled) continue;
             const text = (el.textContent || '').toLowerCase().trim();
             const len = text.length;
-            // Filtra por texto curto e relevante (evita pegar containers grandes)
-            if (len > 2 && len < 40) {
-                if (text.includes('comecar o jogo') || text.includes('começar o jogo') ||
-                    text.includes('comecar') || text.includes('começar') ||
-                    text.includes('apostar') || text.includes('confirmar') ||
-                    text === 'bet' || text === 'place bet' || text === 'ok') {
-                    // Verifica se nao e um link de navegacao
-                    if (!text.includes('depositar') && !text.includes('sacar') && !text.includes('menu')) {
-                        console.log('[BotBlaze] findConfirmButton: texto "' + text.substring(0, 30) + '" tag=' + el.tagName);
-                        return el;
+            if (len > 2 && len < 50 && isConfirmText(text) && !isExcludedText(text)) {
+                console.log('[BotBlaze] findConfirmButton: texto "' + text.substring(0, 30) + '" tag=' + el.tagName + ' class=' + (el.className || '').toString().substring(0, 40));
+                return el;
+            }
+        }
+
+        // 3. Fallback: botao com classe shared-button dentro de place-bet
+        try {
+            const el = document.querySelector('[class*="place-bet"] [class*="shared-button"]');
+            if (el && !el.disabled && el.offsetParent !== null) {
+                console.log('[BotBlaze] findConfirmButton: fallback shared-button');
+                return el;
+            }
+        } catch (e) {}
+
+        // 4. Ultimo fallback: qualquer botao grande visivel na area de aposta
+        try {
+            const placeBet = document.querySelector('.place-bet, [class*="place-bet"]');
+            if (placeBet) {
+                const btns = placeBet.querySelectorAll('button, a, [role="button"]');
+                for (const btn of btns) {
+                    if (btn.offsetParent && !btn.disabled) {
+                        console.log('[BotBlaze] findConfirmButton: fallback place-bet child "' + (btn.textContent || '').trim().substring(0, 30) + '"');
+                        return btn;
                     }
                 }
             }
-        }
+        } catch (e) {}
 
         console.warn('[BotBlaze] findConfirmButton: NENHUM botao encontrado!');
         return null;
@@ -1481,6 +1532,7 @@
      */
     function simulateClick(element) {
         try {
+            element.focus();
             const rect = element.getBoundingClientRect();
             const x = rect.left + rect.width / 2;
             const y = rect.top + rect.height / 2;
@@ -1490,14 +1542,24 @@
                 cancelable: true,
                 view: window,
                 clientX: x,
-                clientY: y
+                clientY: y,
+                screenX: x,
+                screenY: y,
+                button: 0,
+                buttons: 1
             };
 
+            // Pointer events (React e frameworks modernos)
+            element.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse' }));
             element.dispatchEvent(new MouseEvent('mousedown', opts));
+            element.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse' }));
             element.dispatchEvent(new MouseEvent('mouseup', opts));
             element.dispatchEvent(new MouseEvent('click', opts));
-        } catch (e) {
+
+            // Fallback nativo
             element.click();
+        } catch (e) {
+            try { element.click(); } catch (e2) {}
         }
     }
 
