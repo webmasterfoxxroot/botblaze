@@ -249,22 +249,40 @@ async function handleLogout() {
 
 /**
  * Retorna estado geral da extensao (para popup e content script).
+ * Sempre verifica assinatura no servidor para garantir dados atualizados.
  */
 async function handleGetState() {
     const store = await storageGet([
         'api_token', 'user', 'subscription', 'api_url', 'bot_settings'
     ]);
 
-    const hasSubscription = !!(
-        store.subscription &&
-        (store.subscription.status === 'active' || store.subscription.active === true)
-    );
+    // Se tem token, verifica assinatura no servidor
+    let hasSubscription = false;
+    let user = store.user || null;
+    let subscription = store.subscription || null;
+
+    if (store.api_token) {
+        try {
+            const authResult = await handleCheckAuth();
+            if (authResult.authenticated) {
+                hasSubscription = !!authResult.hasSubscription;
+                user = authResult.user || user;
+                subscription = authResult.subscription || subscription;
+            }
+        } catch (e) {
+            // Fallback para dados em cache se o servidor nao responder
+            hasSubscription = !!(
+                store.subscription &&
+                (store.subscription.status === 'active' || store.subscription.active === true)
+            );
+        }
+    }
 
     return {
         success: true,
         authenticated: !!store.api_token,
-        user: store.user || null,
-        subscription: store.subscription || null,
+        user: user,
+        subscription: subscription,
         hasSubscription: hasSubscription,
         api_url: store.api_url || DEFAULT_API,
         settings: store.bot_settings || getDefaultSettings()
@@ -343,8 +361,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
                         api_token: config.api_token,
                         user: config.user,
                         subscription: config.subscription || null,
-                        is_authenticated: true,
-                        bot_settings: getDefaultSettings()
+                        is_authenticated: true
                     });
                     console.log('[BotBlaze] Auto-configurado com sucesso! Usuario: ' + config.user.name);
                     return;
@@ -355,11 +372,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
             console.log('[BotBlaze] Sem config.json embutido. Configuracao manual necessaria.');
         }
 
-        // Fallback: configuracoes padrao (usuario precisara fazer login)
-        await storageSet({
-            api_url: DEFAULT_API,
-            bot_settings: getDefaultSettings()
-        });
+        // Fallback: apenas define a URL da API (settings vem do banco de dados)
+        const existing = await storageGet(['api_url']);
+        if (!existing.api_url) {
+            await storageSet({ api_url: DEFAULT_API });
+        }
     }
 
     if (details.reason === 'update') {

@@ -474,6 +474,34 @@
             const subData = await subRes.json();
             const histResult = await histRes.json();
 
+            // Se subscription.php nao retornou assinatura, tenta via auth validate como fallback
+            if (!subData.subscription && !subData.error) {
+                try {
+                    const authRes = await fetch(API_URL + '/auth.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ action: 'validate' })
+                    });
+                    const authData = await authRes.json();
+                    if (authData.subscription && authData.subscription.active) {
+                        subData.subscription = authData.subscription;
+                        // Converte formato do auth para o formato do subscription
+                        if (!subData.subscription.days_remaining && subData.subscription.expires_at) {
+                            const days = Math.max(0, Math.ceil((new Date(subData.subscription.expires_at) - new Date()) / 86400000));
+                            subData.subscription.days_remaining = days;
+                        }
+                        if (!subData.subscription.plan_name) {
+                            subData.subscription.plan_name = 'Ativo';
+                        }
+                    }
+                } catch (e) { console.warn('Fallback auth check falhou:', e); }
+            }
+
+            // Se ainda nao encontrou, loga para debug
+            if (!subData.subscription) {
+                console.warn('[BotBlaze] subscription.php retornou sem assinatura:', JSON.stringify(subData));
+            }
+
             renderSubscription(subData);
 
             if (!histResult.error) {
