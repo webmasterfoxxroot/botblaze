@@ -3,14 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotBlaze - Apostas Automaticas na Blaze</title>
+    <title>BotBlaze - Apostas Automaticas na Blaze Double</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        html { scroll-behavior: smooth; }
+
+        /* ── HERO ────────────────────────────────────────── */
+        .hero { padding: 100px 24px 80px; text-align: center; position: relative; overflow: hidden; }
+        .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(230,57,70,.08) 0%, transparent 70%); pointer-events: none; }
+        .hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 20px; background: rgba(230,57,70,.1); border: 1px solid rgba(230,57,70,.2); color: var(--accent); font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+        .hero-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+        .hero h1 { font-size: 56px; font-weight: 900; line-height: 1.1; margin-bottom: 20px; letter-spacing: -1px; }
+        .hero h1 span { background: linear-gradient(135deg, #e63946, #ff6b6b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .hero p { font-size: 18px; color: var(--text-muted); max-width: 560px; margin: 0 auto 36px; line-height: 1.6; }
+        .hero-actions { display: flex; gap: 14px; justify-content: center; }
+        .hero-actions .btn-primary { padding: 14px 36px; font-size: 16px; border-radius: 12px; box-shadow: 0 4px 20px rgba(230,57,70,.3); }
+        .hero-actions .btn-outline { padding: 14px 36px; font-size: 16px; border-radius: 12px; }
+
+        /* ── STATS BAR ───────────────────────────────────── */
+        .stats-bar { display: flex; justify-content: center; gap: 48px; padding: 40px 24px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: 0 0 60px; }
+        .stat-item { text-align: center; }
+        .stat-num { font-size: 32px; font-weight: 900; color: var(--text); }
+        .stat-num span { color: var(--accent); }
+        .stat-desc { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ── SECTIONS ────────────────────────────────────── */
+        .section { padding: 80px 0; }
+        .section-title { text-align: center; margin-bottom: 48px; }
+        .section-title h2 { font-size: 32px; font-weight: 800; margin-bottom: 10px; }
+        .section-title p { color: var(--text-muted); font-size: 16px; max-width: 500px; margin: 0 auto; }
+
+        /* ── FEATURES ────────────────────────────────────── */
+        .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .feat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; transition: all .25s; }
+        .feat-card:hover { border-color: rgba(230,57,70,.2); transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,.15); }
+        .feat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+        .feat-icon svg { width: 22px; height: 22px; }
+        .fi-red { background: rgba(230,57,70,.12); color: #e63946; }
+        .fi-blue { background: rgba(88,166,255,.12); color: #58a6ff; }
+        .fi-green { background: rgba(46,204,113,.12); color: #2ecc71; }
+        .fi-gold { background: rgba(210,153,34,.12); color: #d29922; }
+        .fi-purple { background: rgba(167,139,250,.12); color: #a78bfa; }
+        .fi-cyan { background: rgba(34,211,238,.12); color: #22d3ee; }
+        .feat-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+        .feat-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ── HOW IT WORKS ────────────────────────────────── */
+        .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; position: relative; }
+        .steps::before { content: ''; position: absolute; top: 28px; left: 60px; right: 60px; height: 2px; background: linear-gradient(90deg, var(--accent), rgba(230,57,70,.1)); z-index: 0; }
+        .step { text-align: center; position: relative; z-index: 1; }
+        .step-num { width: 56px; height: 56px; border-radius: 16px; background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent); font-size: 22px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; transition: all .2s; }
+        .step:hover .step-num { background: var(--accent); color: #fff; }
+        .step h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+        .step p { font-size: 13px; color: var(--text-muted); line-height: 1.4; max-width: 180px; margin: 0 auto; }
+
+        /* ── PLANS ────────────────────────────────────────── */
+        .plans-section { background: rgba(255,255,255,.01); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .price-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 32px 24px; text-align: center; transition: all .25s; position: relative; }
+        .price-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,.15); }
+        .price-card.pop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .pop-tag { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 5px 18px; border-radius: 20px; letter-spacing: .5px; }
+        .price-name { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .price-val { font-size: 40px; font-weight: 900; color: var(--accent); margin-bottom: 2px; }
+        .price-val small { font-size: 16px; font-weight: 400; color: var(--text-muted); }
+        .price-per { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        .price-list { list-style: none; text-align: left; margin-bottom: 24px; }
+        .price-list li { padding: 8px 0; font-size: 14px; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,.04); display: flex; align-items: center; gap: 10px; }
+        .price-list li:last-child { border-bottom: none; }
+        .price-list li svg { color: var(--green); flex-shrink: 0; }
+        .price-card .btn { width: 100%; padding: 12px; border-radius: 10px; font-size: 15px; }
+        .price-save { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--green); font-weight: 600; }
+
+        /* ── FAQ ──────────────────────────────────────────── */
+        .faq-list { max-width: 680px; margin: 0 auto; }
+        .faq-item { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; transition: border-color .2s; }
+        .faq-item:hover { border-color: rgba(255,255,255,.1); }
+        .faq-q { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; font-size: 15px; font-weight: 600; background: var(--bg-card); }
+        .faq-q svg { flex-shrink: 0; opacity: .4; transition: transform .2s; }
+        .faq-item.open .faq-q svg { transform: rotate(180deg); }
+        .faq-a { padding: 0 20px; max-height: 0; overflow: hidden; transition: all .25s ease; font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+        .faq-item.open .faq-a { padding: 0 20px 16px; max-height: 200px; }
+
+        /* ── CTA ──────────────────────────────────────────── */
+        .cta-section { text-align: center; padding: 80px 24px; }
+        .cta-section h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
+        .cta-section p { color: var(--text-muted); font-size: 16px; margin-bottom: 32px; }
+        .cta-section .btn-primary { padding: 16px 48px; font-size: 18px; border-radius: 14px; box-shadow: 0 4px 20px rgba(230,57,70,.3); }
+
+        /* ── FOOTER ──────────────────────────────────────── */
+        .landing-footer { border-top: 1px solid var(--border); padding: 40px 24px; }
+        .footer-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+        .footer-brand { font-size: 18px; font-weight: 800; color: var(--accent); }
+        .footer-links { display: flex; gap: 24px; }
+        .footer-links a { color: var(--text-muted); font-size: 13px; transition: color .15s; }
+        .footer-links a:hover { color: var(--text); }
+        .footer-copy { font-size: 12px; color: var(--text-muted); }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 34px; }
+            .stats-bar { flex-wrap: wrap; gap: 24px; }
+            .feat-grid, .price-grid { grid-template-columns: 1fr; }
+            .steps { grid-template-columns: repeat(2, 1fr); }
+            .steps::before { display: none; }
+            .footer-inner { flex-direction: column; gap: 16px; text-align: center; }
+            .hero-actions { flex-direction: column; align-items: center; }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
         <a href="/" class="navbar-brand">BotBlaze</a>
-        <ul class="navbar-nav">
-            <li><a href="#features">Como Funciona</a></li>
+        <ul class="navbar-nav" id="nav-links">
+            <li><a href="#features">Funcionalidades</a></li>
             <li><a href="#plans">Planos</a></li>
             <li><a href="login.html">Entrar</a></li>
             <li><a href="register.html" class="btn btn-primary btn-sm">Criar Conta</a></li>
@@ -20,127 +126,244 @@
     <!-- Hero -->
     <section class="hero">
         <div class="container">
+            <div class="hero-badge">
+                <span class="hero-badge-dot"></span>
+                Bot ativo 24/7
+            </div>
             <h1>Apostas Automaticas<br>na <span>Blaze Double</span></h1>
-            <p>Extensao Chrome que aposta automaticamente no jogo Double da Blaze. Analise inteligente, Martingale, Stop Loss/Gain - tudo no piloto automatico.</p>
+            <p>Extensao Chrome que analisa padroes e aposta automaticamente. Martingale, Stop Loss/Gain e estrategias inteligentes no piloto automatico.</p>
             <div class="hero-actions">
                 <a href="register.html" class="btn btn-primary btn-lg">Comecar Agora</a>
-                <a href="#features" class="btn btn-outline btn-lg">Como Funciona</a>
+                <a href="#how" class="btn btn-outline btn-lg">Como Funciona</a>
             </div>
         </div>
     </section>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div class="stat-num"><span>+</span>500</div>
+            <div class="stat-desc">Usuarios ativos</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num"><span>+</span>50k</div>
+            <div class="stat-desc">Apostas realizadas</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">72<span>%</span></div>
+            <div class="stat-desc">Win rate medio</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">24<span>/7</span></div>
+            <div class="stat-desc">Funcionamento</div>
+        </div>
+    </div>
 
     <!-- Features -->
-    <section id="features" class="container">
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">&#9881;</div>
-                <h3>Extensao Chrome</h3>
-                <p>Instale a extensao, faca login e o bot aposta direto no seu navegador. Sem complicacao.</p>
+    <section id="features" class="section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Por que usar o BotBlaze?</h2>
+                <p>Tudo que voce precisa para automatizar suas apostas com seguranca</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#9889;</div>
-                <h3>100% Automatico</h3>
-                <p>O bot analisa os padroes, escolhe a cor e aposta automaticamente. Voce so assiste.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#128202;</div>
-                <h3>Estrategias Inteligentes</h3>
-                <p>Frequencia de cores, Martingale configuravel, Stop Loss e Stop Gain para proteger seu saldo.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#128274;</div>
-                <h3>Stop Loss / Gain</h3>
-                <p>Defina limites de perda e ganho. O bot para automaticamente quando atingir seus limites.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#128176;</div>
-                <h3>Martingale</h3>
-                <p>Estrategia de recuperacao configuravel. Defina o multiplicador e o numero maximo de niveis.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#128241;</div>
-                <h3>Painel de Controle</h3>
-                <p>Acompanhe seus resultados, historico de apostas e lucro em tempo real pelo site.</p>
+            <div class="feat-grid">
+                <div class="feat-card">
+                    <div class="feat-icon fi-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2H7a5 5 0 0 0-5 5v10a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5Z"/><path d="M12 8v8m-4-4h8"/></svg></div>
+                    <h3>Extensao Chrome</h3>
+                    <p>Instale em segundos, faca login com sua conta e o bot roda direto no navegador.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon fi-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                    <h3>100% Automatico</h3>
+                    <p>Analisa padroes do jogo, escolhe a cor e aposta sozinho. Voce so acompanha.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon fi-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
+                    <h3>Estrategias Inteligentes</h3>
+                    <p>Frequencia de cores, Martingale, deteccao de padroes - escolha a sua estrategia.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon fi-gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                    <h3>Stop Loss / Gain</h3>
+                    <p>Defina limites de perda e ganho. O bot para automaticamente para proteger seu saldo.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon fi-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                    <h3>Martingale</h3>
+                    <p>Recuperacao inteligente com multiplicador e niveis configuraveis por voce.</p>
+                </div>
+                <div class="feat-card">
+                    <div class="feat-icon fi-cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                    <h3>Dashboard em Tempo Real</h3>
+                    <p>Historico completo, estatisticas, win rate e lucro. Tudo no seu painel.</p>
+                </div>
             </div>
         </div>
     </section>
 
-    <!-- How it works -->
-    <section class="container" style="margin-bottom: 60px;">
-        <div class="card" style="text-align: center; padding: 48px;">
-            <h2 style="font-size: 28px; margin-bottom: 32px;">Como Funciona</h2>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">
-                <div>
-                    <div style="font-size: 36px; font-weight: 900; color: var(--accent); margin-bottom: 8px;">1</div>
-                    <h3 style="font-size: 16px; margin-bottom: 4px;">Crie sua conta</h3>
-                    <p style="font-size: 13px; color: var(--text-muted);">Cadastre-se e escolha seu plano</p>
+    <!-- How it Works -->
+    <section id="how" class="section" style="padding-top: 40px;">
+        <div class="container">
+            <div class="section-title">
+                <h2>Como Funciona</h2>
+                <p>Em 4 passos simples voce esta pronto</p>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <h3>Crie sua conta</h3>
+                    <p>Cadastre-se em segundos e escolha seu plano</p>
                 </div>
-                <div>
-                    <div style="font-size: 36px; font-weight: 900; color: var(--accent); margin-bottom: 8px;">2</div>
-                    <h3 style="font-size: 16px; margin-bottom: 4px;">Instale a extensao</h3>
-                    <p style="font-size: 13px; color: var(--text-muted);">Baixe e instale no Chrome</p>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <h3>Instale a extensao</h3>
+                    <p>Baixe e ative no Chrome em 1 minuto</p>
                 </div>
-                <div>
-                    <div style="font-size: 36px; font-weight: 900; color: var(--accent); margin-bottom: 8px;">3</div>
-                    <h3 style="font-size: 16px; margin-bottom: 4px;">Configure o bot</h3>
-                    <p style="font-size: 13px; color: var(--text-muted);">Defina valor, estrategia e limites</p>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <h3>Configure o bot</h3>
+                    <p>Valor, estrategia, Stop Loss e Martingale</p>
                 </div>
-                <div>
-                    <div style="font-size: 36px; font-weight: 900; color: var(--accent); margin-bottom: 8px;">4</div>
-                    <h3 style="font-size: 16px; margin-bottom: 4px;">Lucre no automatico</h3>
-                    <p style="font-size: 13px; color: var(--text-muted);">Abra a Blaze e deixe o bot trabalhar</p>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <h3>Lucre automatico</h3>
+                    <p>Abra a Blaze e deixe o bot trabalhar por voce</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Plans -->
-    <section id="plans" class="container">
-        <h2 style="text-align: center; font-size: 28px; margin-bottom: 8px;">Escolha seu Plano</h2>
-        <p style="text-align: center; color: var(--text-muted); margin-bottom: 40px;">Cancele quando quiser. Sem fidelidade.</p>
-
-        <div class="plans-grid" id="plans-container">
-            <div class="plan-card">
-                <div class="plan-name">Semanal</div>
-                <div class="plan-price">R$ 29,90</div>
-                <div class="plan-period">por 7 dias</div>
-                <ul class="plan-features">
-                    <li>Extensao Chrome</li>
-                    <li>Apostas automaticas</li>
-                    <li>Suporte basico</li>
-                </ul>
-                <a href="register.html" class="btn btn-outline btn-full">Comecar</a>
+    <section id="plans" class="section plans-section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Escolha seu Plano</h2>
+                <p>Sem fidelidade. Cancele quando quiser.</p>
             </div>
-            <div class="plan-card featured">
-                <div class="plan-name">Mensal</div>
-                <div class="plan-price">R$ 79,90</div>
-                <div class="plan-period">por 30 dias</div>
-                <ul class="plan-features">
-                    <li>Extensao Chrome</li>
-                    <li>Apostas automaticas</li>
-                    <li>Martingale configuravel</li>
-                    <li>Suporte prioritario</li>
-                </ul>
-                <a href="register.html" class="btn btn-primary btn-full">Assinar</a>
-            </div>
-            <div class="plan-card">
-                <div class="plan-name">Trimestral</div>
-                <div class="plan-price">R$ 199,90</div>
-                <div class="plan-period">por 90 dias</div>
-                <ul class="plan-features">
-                    <li>Extensao Chrome</li>
-                    <li>Apostas automaticas</li>
-                    <li>Martingale configuravel</li>
-                    <li>Suporte VIP</li>
-                    <li>Estrategias avancadas</li>
-                </ul>
-                <a href="register.html" class="btn btn-outline btn-full">Comecar</a>
+            <div class="price-grid">
+                <div class="price-card">
+                    <div class="price-name">Semanal</div>
+                    <div class="price-val"><small>R$</small> 29,90</div>
+                    <div class="price-per">por 7 dias</div>
+                    <ul class="price-list">
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Extensao Chrome</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Apostas automaticas</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Suporte basico</li>
+                    </ul>
+                    <a href="register.html" class="btn btn-outline">Comecar</a>
+                </div>
+                <div class="price-card pop">
+                    <div class="pop-tag">MAIS POPULAR</div>
+                    <div class="price-name">Mensal</div>
+                    <div class="price-val"><small>R$</small> 79,90</div>
+                    <div class="price-per">por 30 dias</div>
+                    <ul class="price-list">
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Extensao Chrome</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Apostas automaticas</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Martingale configuravel</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Suporte prioritario</li>
+                    </ul>
+                    <a href="register.html" class="btn btn-primary">Assinar Agora</a>
+                    <div class="price-save">Economize R$ 39,70 vs semanal</div>
+                </div>
+                <div class="price-card">
+                    <div class="price-name">Trimestral</div>
+                    <div class="price-val"><small>R$</small> 199,90</div>
+                    <div class="price-per">por 90 dias</div>
+                    <ul class="price-list">
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Extensao Chrome</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Apostas automaticas</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Martingale configuravel</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Suporte VIP</li>
+                        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg> Estrategias avancadas</li>
+                    </ul>
+                    <a href="register.html" class="btn btn-outline">Comecar</a>
+                    <div class="price-save">Economize R$ 159,80 vs semanal</div>
+                </div>
             </div>
         </div>
     </section>
 
-    <footer class="footer">
-        <p>BotBlaze &copy; 2026 - Todos os direitos reservados</p>
+    <!-- FAQ -->
+    <section class="section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Perguntas Frequentes</h2>
+            </div>
+            <div class="faq-list">
+                <div class="faq-item">
+                    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+                        Como instalo a extensao?
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="faq-a">Apos criar sua conta e assinar um plano, va ao Dashboard e siga os 3 passos: baixe a pasta da extensao, abra chrome://extensions, ative o Modo Desenvolvedor e carregue a pasta.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+                        O bot funciona em qual jogo?
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="faq-a">O BotBlaze funciona exclusivamente no jogo Double da plataforma Blaze. Ele analisa os resultados anteriores e aposta automaticamente na cor escolhida pela estrategia.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+                        Qual a taxa de acerto?
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="faq-a">A taxa varia conforme a estrategia e as condicoes do jogo. Em media, nossos usuarios reportam win rates entre 65% e 78%. O Martingale ajuda a recuperar perdas quando configurado corretamente.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+                        Posso perder dinheiro?
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="faq-a">Sim, como qualquer aposta envolve risco. Por isso oferecemos Stop Loss e Stop Gain para limitar suas perdas e proteger seus ganhos. Configure seus limites com responsabilidade.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+                        Como cancelo minha assinatura?
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <div class="faq-a">Nao ha fidelidade. Sua assinatura expira automaticamente no fim do periodo contratado. Voce nao sera cobrado novamente a menos que renove manualmente.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+        <h2>Pronto para comecar?</h2>
+        <p>Crie sua conta agora e comece a lucrar no automatico</p>
+        <a href="register.html" class="btn btn-primary">Criar Conta Gratis</a>
+    </section>
+
+    <!-- Footer -->
+    <footer class="landing-footer">
+        <div class="footer-inner">
+            <div class="footer-brand">BotBlaze</div>
+            <div class="footer-links">
+                <a href="#features">Funcionalidades</a>
+                <a href="#how">Como Funciona</a>
+                <a href="#plans">Planos</a>
+                <a href="login.html">Entrar</a>
+            </div>
+            <div class="footer-copy">&copy; 2026 BotBlaze. Todos os direitos reservados.</div>
+        </div>
     </footer>
+
+    <script>
+    // If logged in, update nav links
+    const token = localStorage.getItem('botblaze_token');
+    if (token) {
+        const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
+        const nav = document.getElementById('nav-links');
+        nav.innerHTML = `
+            <li><a href="#features">Funcionalidades</a></li>
+            <li><a href="#plans">Planos</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            ${user.role === 'admin' ? '<li><a href="admin.html">Admin</a></li>' : ''}
+        `;
+    }
+    </script>
 </body>
 </html>
