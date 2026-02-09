@@ -497,9 +497,14 @@
                 } catch (e) { console.warn('Fallback auth check falhou:', e); }
             }
 
-            // Se ainda nao encontrou, loga para debug
+            // Se ainda nao encontrou, mostra debug na tela
             if (!subData.subscription) {
-                console.warn('[BotBlaze] subscription.php retornou sem assinatura:', JSON.stringify(subData));
+                console.warn('[BotBlaze] DEBUG subscription.php:', JSON.stringify(subData, null, 2));
+                if (subData._debug) {
+                    console.warn('[BotBlaze] User ID:', subData._debug.user_id,
+                        '| Total subs:', subData._debug.total_subscriptions,
+                        '| Subs:', JSON.stringify(subData._debug.subscriptions));
+                }
             }
 
             renderSubscription(subData);
