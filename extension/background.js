@@ -245,7 +245,8 @@ async function handleLogout() {
         'is_authenticated',
         'user',
         'subscription',
-        'bot_settings'
+        'bot_settings',
+        'session_stats'
     ]);
 
     return { success: true };
@@ -312,6 +313,54 @@ function getDefaultSettings() {
     };
 }
 
+// --------------- handlers de estatisticas da sessao ---------------
+
+/**
+ * Salva estatisticas da sessao no chrome.storage.local.
+ * Persiste entre recarregamentos de pagina.
+ */
+async function handleSaveSessionStats(stats) {
+    await storageSet({
+        session_stats: {
+            sessionProfit: stats.sessionProfit || 0,
+            sessionBets: stats.sessionBets || 0,
+            sessionWins: stats.sessionWins || 0,
+            sessionLosses: stats.sessionLosses || 0,
+            todayBets: stats.todayBets || 0,
+            martingaleLevel: stats.martingaleLevel || 0,
+            currentBetColor: stats.currentBetColor !== undefined ? stats.currentBetColor : null,
+            currentBetAmount: stats.currentBetAmount || 0,
+            waitingResult: stats.waitingResult || false,
+            savedAt: Date.now()
+        }
+    });
+    return { success: true };
+}
+
+/**
+ * Recupera estatisticas da sessao salvas.
+ * Retorna null se nao houver dados ou se forem de um dia anterior.
+ */
+async function handleGetSessionStats() {
+    const store = await storageGet(['session_stats']);
+    if (!store.session_stats) {
+        return { success: true, stats: null };
+    }
+
+    // Verifica se os dados sao do mesmo dia (reseta diariamente)
+    const saved = new Date(store.session_stats.savedAt);
+    const now = new Date();
+    if (saved.getDate() !== now.getDate() ||
+        saved.getMonth() !== now.getMonth() ||
+        saved.getFullYear() !== now.getFullYear()) {
+        // Dados de outro dia - limpa
+        await storageRemove(['session_stats']);
+        return { success: true, stats: null };
+    }
+
+    return { success: true, stats: store.session_stats };
+}
+
 // --------------- listener de mensagens ---------------
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -319,14 +368,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // Mapa de handlers
     const handlers = {
-        login:        () => handleLogin(payload || message),
-        checkAuth:    () => handleCheckAuth(),
-        getSettings:  () => handleGetSettings(),
-        saveSettings: () => handleSaveSettings(payload || message.settings),
-        recordBet:    () => handleRecordBet(payload || message.bet),
-        logout:       () => handleLogout(),
-        getState:     () => handleGetState(),
-        setApiUrl:    async () => {
+        login:            () => handleLogin(payload || message),
+        checkAuth:        () => handleCheckAuth(),
+        getSettings:      () => handleGetSettings(),
+        saveSettings:     () => handleSaveSettings(payload || message.settings),
+        recordBet:        () => handleRecordBet(payload || message.bet),
+        logout:           () => handleLogout(),
+        getState:         () => handleGetState(),
+        saveSessionStats: () => handleSaveSessionStats(payload || {}),
+        getSessionStats:  () => handleGetSessionStats(),
+        setApiUrl:        async () => {
             const url = (payload && payload.api_url) || message.api_url;
             await storageSet({ api_url: url });
             return { success: true };

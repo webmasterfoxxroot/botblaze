@@ -167,6 +167,25 @@
             state.settings = getDefaultSettings();
         }
 
+        // Restaura estatisticas da sessao (sobrevive a recarregamentos)
+        const savedStats = await sendMessage({ action: 'getSessionStats' });
+        if (savedStats && savedStats.stats) {
+            const s = savedStats.stats;
+            state.sessionProfit = s.sessionProfit || 0;
+            state.sessionBets = s.sessionBets || 0;
+            state.sessionWins = s.sessionWins || 0;
+            state.sessionLosses = s.sessionLosses || 0;
+            state.todayBets = s.todayBets || 0;
+            state.martingaleLevel = s.martingaleLevel || 0;
+            if (s.waitingResult && s.currentBetColor !== null) {
+                state.currentBetColor = s.currentBetColor;
+                state.currentBetAmount = s.currentBetAmount || 0;
+                state.waitingResult = true;
+            }
+            console.log('[BotBlaze] Estatisticas restauradas: ' +
+                state.sessionBets + ' apostas, R$' + state.sessionProfit.toFixed(2) + ' lucro');
+        }
+
         createOverlay();
         readInitialHistory();
         startObserver();
@@ -1151,6 +1170,9 @@
         state.sessionBets++;
         state.todayBets++;
 
+        // Persiste estatisticas (aposta em andamento)
+        saveSessionStats();
+
         updateOverlay();
         return true;
     }
@@ -1409,6 +1431,9 @@
             state.waitingResult = false;
             state.currentBetColor = null;
             state.currentBetAmount = 0;
+
+            // Persiste estatisticas para sobreviver a recarregamentos
+            saveSessionStats();
         }
 
         updateOverlay();
@@ -1977,6 +2002,27 @@
     }
 
     // ===================== HELPERS =====================
+
+    /**
+     * Salva estatisticas da sessao no storage via background.
+     * Chamado apos cada resultado de aposta para persistir dados.
+     */
+    function saveSessionStats() {
+        sendMessage({
+            action: 'saveSessionStats',
+            payload: {
+                sessionProfit: state.sessionProfit,
+                sessionBets: state.sessionBets,
+                sessionWins: state.sessionWins,
+                sessionLosses: state.sessionLosses,
+                todayBets: state.todayBets,
+                martingaleLevel: state.martingaleLevel,
+                currentBetColor: state.currentBetColor,
+                currentBetAmount: state.currentBetAmount,
+                waitingResult: state.waitingResult
+            }
+        });
+    }
 
     function sendMessage(msg) {
         return new Promise((resolve) => {
