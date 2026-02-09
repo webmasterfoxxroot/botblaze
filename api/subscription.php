@@ -12,28 +12,6 @@ $db = getDB();
 // Get current active subscription
 $subscription = hasActiveSubscription($user['id']);
 
-// DEBUG: Se nao encontrou assinatura, busca informacao crua do banco
-$debug = null;
-if (!$subscription) {
-    // Busca TODAS as subscriptions deste usuario (sem filtro de status/expiry)
-    $stmtDebug = $db->prepare("
-        SELECT s.id, s.user_id, s.plan_id, s.status, s.starts_at, s.expires_at,
-               p.name as plan_name, p.id as pid, NOW() as server_now
-        FROM subscriptions s
-        LEFT JOIN plans p ON s.plan_id = p.id
-        WHERE s.user_id = ?
-        ORDER BY s.id DESC
-    ");
-    $stmtDebug->execute([$user['id']]);
-    $allSubs = $stmtDebug->fetchAll();
-
-    $debug = [
-        'user_id' => $user['id'],
-        'total_subscriptions' => count($allSubs),
-        'subscriptions' => $allSubs
-    ];
-}
-
 // Get user's api_token
 $stmtToken = $db->prepare("SELECT api_token FROM users WHERE id = ?");
 $stmtToken->execute([$user['id']]);
@@ -46,10 +24,6 @@ $response = [
     'plans' => [],
     'days_remaining' => 0,
 ];
-
-if ($debug) {
-    $response['_debug'] = $debug;
-}
 
 if ($subscription) {
     $daysRemaining = max(0, (int) ceil((strtotime($subscription['expires_at']) - time()) / 86400));
