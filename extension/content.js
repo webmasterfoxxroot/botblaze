@@ -1596,28 +1596,41 @@
             return;
         }
 
-        // Botao ativo! Clica com delay humano
-        const delay = 150 + Math.floor(Math.random() * 200);
+        // Botao ativo! Aguarda delay para React atualizar estado interno
+        // (remocao de "disabled" no DOM nao significa que React ja processou)
+        const delay = 400 + Math.floor(Math.random() * 300);
         setTimeout(() => {
-            // Re-busca para garantir que nao ficou stale
+            // Re-busca elemento fresco (evita referencia stale)
             let freshBtn = null;
             for (const sel of selectors) {
                 try {
                     const el = document.querySelector(sel);
-                    if (el && el.offsetParent !== null) { freshBtn = el; break; }
+                    if (el && el.offsetParent !== null) {
+                        const fc = (el.className || '').toString().toLowerCase();
+                        // Verifica se ainda esta ativo
+                        if (!fc.includes('disabled')) {
+                            freshBtn = el;
+                            break;
+                        }
+                    }
                 } catch (e) {}
             }
 
-            if (freshBtn) {
-                clickColorElement(freshBtn, color);
-            } else {
-                console.warn('[BotBlaze] Cor: botao sumiu antes do click');
+            if (!freshBtn) {
+                console.warn('[BotBlaze] Cor: botao voltou a disabled ou sumiu, retentando...');
+                if (attempt + 1 < MAX_ATTEMPTS) {
+                    setTimeout(() => waitForColorAndClick(color, attempt + 1), POLL_INTERVAL);
+                }
+                return;
             }
 
-            // Depois de clicar na cor, aguarda confirm button
+            clickColorElement(freshBtn, color);
+
+            // Depois de clicar na cor, aguarda 800ms para a Blaze processar
+            // e so entao busca o confirm button
             setTimeout(() => {
                 waitAndClickConfirm(0);
-            }, 500);
+            }, 800);
         }, delay);
     }
 
@@ -1628,12 +1641,19 @@
             deepest = deepest.firstElementChild;
         }
 
-        // .click() nativo = isTrusted:true (aceito pela Blaze)
-        deepest.click();
-        console.log('[BotBlaze] Cor: .click() em ' + deepest.tagName +
-            ' texto="' + (deepest.textContent || '').trim().substring(0, 10) +
-            '" (parent: ' + element.tagName + '.' + (element.className || '').toString().substring(0, 20) + ')');
+        // Clica no elemento pai (div.red) - alguns React handlers escutam aqui
+        element.click();
 
+        // Se tem filho diferente, clica nele tambem apos 50ms
+        // (garante que o click chega no target correto do React)
+        if (deepest !== element) {
+            setTimeout(() => { deepest.click(); }, 50);
+        }
+
+        console.log('[BotBlaze] Cor: .click() em ' + element.tagName +
+            '.' + (element.className || '').toString().substring(0, 20) +
+            ' + filho ' + deepest.tagName +
+            ' texto="' + (deepest.textContent || '').trim().substring(0, 10) + '"');
         console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
     }
 
@@ -1719,7 +1739,10 @@
             // VERIFICACAO VIA SALDO: confirma se aposta foi efetivada
             const balanceAfter = readBalance();
             const balanceDiff = balanceAfter - state.balanceBeforeBet;
-            const betWasPlaced = (state.balanceBeforeBet > 0 && Math.abs(balanceDiff) > 0.01);
+            // Verifica se o saldo mudou significativamente (minimo metade do valor apostado)
+            // Flutuacoes de R$0.01-0.02 sao arredondamento da Blaze, nao apostas
+            const minChange = Math.max(0.03, state.currentBetAmount * 0.4);
+            const betWasPlaced = (state.balanceBeforeBet > 0 && Math.abs(balanceDiff) >= minChange);
 
             if (!betWasPlaced && state.balanceBeforeBet > 0) {
                 // Saldo nao mudou = aposta NAO foi efetivada na Blaze
