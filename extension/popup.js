@@ -222,6 +222,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         viewLogin.style.display = 'none';
         viewNoSub.style.display = 'block';
         viewMain.style.display  = 'none';
+
+        // Mostra nome do usuario
+        if (data && data.user) {
+            const nameEl = document.getElementById('nosub-username');
+            if (nameEl) nameEl.textContent = data.user.name || data.user.email || 'usuario';
+        }
     }
 
     /**
