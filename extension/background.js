@@ -81,7 +81,7 @@ async function handleLogin({ email, password }) {
         return { success: false, error: data.error || 'Credenciais invalidas' };
     }
 
-    const token = data.token || data.access_token;
+    const token = data.api_token || data.token || data.access_token;
     const user = data.user || {};
     const subscription = data.subscription || null;
 
@@ -96,7 +96,7 @@ async function handleLogin({ email, password }) {
         success: true,
         user: user,
         subscription: subscription,
-        hasSubscription: !!(subscription && subscription.status === 'active')
+        hasSubscription: !!(subscription && (subscription.status === 'active' || subscription.active === true))
     };
 }
 
