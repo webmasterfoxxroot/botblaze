@@ -85,6 +85,30 @@
         _historyRetryCount: 0
     };
 
+    // ===================== ESTADO DA ANALISE =====================
+
+    const analysis = {
+        // Rastreamento de intervalos do branco
+        roundsSinceWhite: 0,
+        whiteIntervals: [],
+        avgWhiteInterval: 25,
+
+        // Rastreamento de numeros (0-14)
+        numberCounts: new Array(15).fill(0),
+
+        // Sinais da ultima analise
+        lastSignals: [],
+        lastDecision: null,
+        lastConfidence: 0,
+
+        // Contadores
+        roundsSkipped: 0,
+        totalRoundsAnalyzed: 0,
+
+        // Limite de confianca (%)
+        minConfidence: 60
+    };
+
     // ===================== INICIALIZACAO =====================
 
     async function init() {
@@ -591,107 +615,399 @@
         return -1;
     }
 
-    // ===================== ESTRATEGIAS DE APOSTA =====================
+    // ===================== SISTEMA INTELIGENTE DE SINAIS =====================
 
     /**
-     * Analisa o historico e retorna a cor para apostar.
+     * Motor principal de analise. Executa 7 analisadores independentes,
+     * combina os sinais por peso e so aposta quando a confianca e alta.
+     * Retorna a cor para apostar ou null para pular a rodada.
      */
     function analyzeAndDecide() {
         if (!state.settings) return null;
 
-        const strategy = state.settings.strategy || 'frequency';
-        const history = state.gameHistory.slice(0, 20);
+        const history = state.gameHistory;
 
-        if (history.length < 3) {
-            console.log('[BotBlaze] Historico insuficiente (' + history.length + ' resultados)');
+        if (history.length < 5) {
+            console.log('[BotBlaze] Historico insuficiente (' + history.length + '/5 minimo)');
             return null;
         }
 
-        switch (strategy) {
-            case 'frequency':
-            case 'color_frequency':
-                return strategyFrequency(history);
-
-            case 'pattern':
-                return strategyPattern(history);
-
-            case 'martingale':
-                // No martingale puro: se perdeu, repete mesma cor
-                if (state.currentBetColor !== null && state.martingaleLevel > 0) {
-                    return state.currentBetColor;
-                }
-                return strategyFrequency(history);
-
-            default:
-                console.warn('[BotBlaze] Estrategia desconhecida:', strategy);
-                return strategyFrequency(history);
+        // Martingale override: se perdeu e martingale esta ativo, repete mesma cor
+        const mgEnabled = state.settings &&
+            (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
+        if (mgEnabled && state.martingaleLevel > 0 && state.currentBetColor !== null) {
+            console.log('[BotBlaze] Martingale nv ' + state.martingaleLevel + ': repetindo ' + COLOR_NAMES[state.currentBetColor]);
+            return state.currentBetColor;
         }
-    }
 
-    /**
-     * Estrategia de Frequencia de Cor:
-     * Aposta na cor que menos apareceu nos ultimos N resultados.
-     */
-    function strategyFrequency(history) {
-        const counts = { [COLOR_RED]: 0, [COLOR_BLACK]: 0, [COLOR_WHITE]: 0 };
+        analysis.totalRoundsAnalyzed++;
 
-        history.forEach((h) => {
-            if (h.color in counts) counts[h.color]++;
+        // === Executa todos os analisadores ===
+        const signals = [
+            analyzeStreak(history),
+            analyzeAlternation(history),
+            analyzeFrequencyGap(history),
+            analyzeDuoPattern(history),
+            analyzeWhitePrediction(history),
+            analyzeColorGap(history),
+            analyzeRecentTrend(history)
+        ].filter(s => s !== null && s.confidence > 0);
+
+        analysis.lastSignals = signals;
+
+        if (signals.length === 0) {
+            analysis.roundsSkipped++;
+            analysis.lastDecision = null;
+            analysis.lastConfidence = 0;
+            console.log('[BotBlaze] Nenhum sinal. Pulando rodada. (total puladas: ' + analysis.roundsSkipped + ')');
+            updateOverlay();
+            return null;
+        }
+
+        // Log de todos os sinais
+        signals.forEach(s => {
+            console.log('[BotBlaze] Sinal: ' + s.name + ' -> ' + COLOR_NAMES[s.color] +
+                ' (' + s.confidence + '%) | ' + s.reason);
         });
 
-        // Aposta na cor (vermelho ou preto) que menos apareceu
-        if (counts[COLOR_RED] <= counts[COLOR_BLACK]) {
-            return COLOR_RED;
-        } else {
-            return COLOR_BLACK;
+        // === Combina sinais por voto ponderado ===
+        const votes = { [COLOR_RED]: 0, [COLOR_BLACK]: 0, [COLOR_WHITE]: 0 };
+        const counts = { [COLOR_RED]: 0, [COLOR_BLACK]: 0, [COLOR_WHITE]: 0 };
+
+        signals.forEach(s => {
+            votes[s.color] += s.confidence;
+            counts[s.color]++;
+        });
+
+        // Encontra a cor com mais votos ponderados
+        let bestColor = null;
+        let bestVotes = 0;
+
+        for (const c of [COLOR_RED, COLOR_BLACK, COLOR_WHITE]) {
+            if (votes[c] > bestVotes) {
+                bestVotes = votes[c];
+                bestColor = c;
+            }
         }
+
+        if (bestColor === null) {
+            analysis.roundsSkipped++;
+            analysis.lastDecision = null;
+            analysis.lastConfidence = 0;
+            updateOverlay();
+            return null;
+        }
+
+        // Calcula confianca media dos sinais que concordam
+        const agreeCount = counts[bestColor];
+        const avgConfidence = agreeCount > 0 ? Math.round(bestVotes / agreeCount) : 0;
+
+        // Calcula dominancia (% dos votos totais)
+        const totalVotes = votes[COLOR_RED] + votes[COLOR_BLACK] + votes[COLOR_WHITE];
+        const dominance = totalVotes > 0 ? Math.round(bestVotes / totalVotes * 100) : 0;
+
+        // Conta sinais que discordam com confianca alta
+        const disagreeStrong = signals.filter(s => s.color !== bestColor && s.confidence >= 50).length;
+
+        // === Decisao de confianca ===
+        const threshold = bestColor === COLOR_WHITE
+            ? analysis.minConfidence + 15   // Branco: precisa confianca maior (x14 mas raro)
+            : analysis.minConfidence;
+
+        // Rejeita se confianca baixa
+        if (avgConfidence < threshold) {
+            analysis.roundsSkipped++;
+            analysis.lastDecision = null;
+            analysis.lastConfidence = avgConfidence;
+            console.log('[BotBlaze] Confianca baixa: ' + avgConfidence + '% (min: ' + threshold + '%). Pulando.');
+            updateOverlay();
+            return null;
+        }
+
+        // Rejeita se dominancia fraca (sinais muito divididos)
+        if (dominance < 55) {
+            analysis.roundsSkipped++;
+            analysis.lastDecision = null;
+            analysis.lastConfidence = avgConfidence;
+            console.log('[BotBlaze] Dominancia fraca: ' + dominance + '% (min: 55%). Sinais divididos. Pulando.');
+            updateOverlay();
+            return null;
+        }
+
+        // Rejeita se ha mais sinais fortes contra do que a favor
+        if (disagreeStrong >= agreeCount) {
+            analysis.roundsSkipped++;
+            analysis.lastDecision = null;
+            analysis.lastConfidence = avgConfidence;
+            console.log('[BotBlaze] Sinais conflitantes (' + agreeCount + ' a favor, ' + disagreeStrong + ' contra). Pulando.');
+            updateOverlay();
+            return null;
+        }
+
+        // === DECISAO FINAL ===
+        analysis.lastDecision = bestColor;
+        analysis.lastConfidence = avgConfidence;
+        analysis.roundsSkipped = 0;
+
+        console.log('[BotBlaze] >>> DECISAO: ' + COLOR_NAMES[bestColor] +
+            ' | Confianca: ' + avgConfidence + '%' +
+            ' | Dominancia: ' + dominance + '%' +
+            ' | Sinais: ' + agreeCount + '/' + signals.length);
+
+        updateOverlay();
+        return bestColor;
     }
 
-    /**
-     * Estrategia de Padrao (Pattern):
-     * Detecta sequencias e aposta na cor oposta.
-     */
-    function strategyPattern(history) {
+    // ----- Analisador 1: Sequencia (Streak) -----
+    // Se uma cor aparece 3+ vezes seguidas, aposta na oposta.
+    function analyzeStreak(history) {
         if (history.length < 3) return null;
 
-        // Conta sequencia atual (mesma cor consecutiva)
         const streakColor = history[0].color;
-        let streakCount = 0;
+        if (streakColor === COLOR_WHITE) return null; // Ignora streaks de branco
+
+        let len = 1;
+        for (let i = 1; i < history.length; i++) {
+            if (history[i].color === streakColor) len++;
+            else break;
+        }
+
+        if (len < 3) return null;
+
+        // Confianca: 3=55%, 4=65%, 5=72%, 6+=78%
+        const conf = Math.min(78, 40 + len * 12);
+        const opposite = streakColor === COLOR_RED ? COLOR_BLACK : COLOR_RED;
+
+        return {
+            name: 'Sequencia',
+            color: opposite,
+            confidence: conf,
+            reason: len + 'x ' + COLOR_NAMES[streakColor] + ' seguidos'
+        };
+    }
+
+    // ----- Analisador 2: Alternancia -----
+    // Detecta padroes R-B-R-B e continua a sequencia.
+    function analyzeAlternation(history) {
+        if (history.length < 5) return null;
+
+        let altCount = 0;
+        for (let i = 0; i < Math.min(history.length - 1, 10); i++) {
+            if (history[i].color !== COLOR_WHITE &&
+                history[i + 1].color !== COLOR_WHITE &&
+                history[i].color !== history[i + 1].color) {
+                altCount++;
+            } else break;
+        }
+
+        if (altCount < 3) return null;
+
+        const lastColor = history[0].color;
+        const nextColor = lastColor === COLOR_RED ? COLOR_BLACK : COLOR_RED;
+        // Confianca: 3=50%, 4=58%, 5=64%, 6+=70%
+        const conf = Math.min(70, 38 + altCount * 8);
+
+        return {
+            name: 'Alternancia',
+            color: nextColor,
+            confidence: conf,
+            reason: altCount + ' alternacoes consecutivas'
+        };
+    }
+
+    // ----- Analisador 3: Desequilibrio de Frequencia -----
+    // Quando uma cor esta muito sub-representada nos ultimos 20 jogos.
+    function analyzeFrequencyGap(history) {
+        const sample = history.slice(0, 20);
+        if (sample.length < 10) return null;
+
+        let redCount = 0, blackCount = 0;
+        sample.forEach(h => {
+            if (h.color === COLOR_RED) redCount++;
+            if (h.color === COLOR_BLACK) blackCount++;
+        });
+
+        const total = redCount + blackCount;
+        if (total < 8) return null;
+
+        const imbalance = Math.abs(redCount - blackCount) / total;
+        if (imbalance < 0.25) return null; // Menos de 25% diferenca = equilibrado
+
+        const underColor = redCount < blackCount ? COLOR_RED : COLOR_BLACK;
+        const underCount = Math.min(redCount, blackCount);
+        const overCount = Math.max(redCount, blackCount);
+
+        // Confianca baseada no desequilibrio
+        const conf = Math.min(68, 35 + Math.round(imbalance * 80));
+
+        return {
+            name: 'Frequencia',
+            color: underColor,
+            confidence: conf,
+            reason: COLOR_NAMES[underColor] + ' ' + underCount + 'x vs ' + overCount + 'x em ' + sample.length + ' jogos'
+        };
+    }
+
+    // ----- Analisador 4: Padrao de Pares/Trios -----
+    // Detecta padroes como RR-BB-RR (pares alternados) ou RRR -> muda.
+    function analyzeDuoPattern(history) {
+        if (history.length < 6) return null;
+
+        // Verifica se os ultimos 2 sao da mesma cor (par formado)
+        if (history[0].color === COLOR_WHITE || history[1].color === COLOR_WHITE) return null;
+        if (history[0].color !== history[1].color) return null;
+
+        const pairColor = history[0].color;
+
+        // Verifica historico de pares: quando 2+ da mesma cor vieram, o que veio depois?
+        let pairsFound = 0;
+        let changedAfterPair = 0;
+
+        for (let i = 2; i < history.length - 2; i++) {
+            if (history[i].color !== COLOR_WHITE &&
+                history[i].color === history[i + 1].color) {
+                pairsFound++;
+                // O que veio antes desse par? (lembrar: history[0] e o mais recente)
+                if (i >= 1 && history[i - 1].color !== history[i].color) {
+                    changedAfterPair++;
+                }
+            }
+        }
+
+        if (pairsFound < 2) return null;
+
+        const changeRate = changedAfterPair / pairsFound;
+
+        if (changeRate >= 0.6) {
+            // Pares tendem a ser seguidos por cor oposta
+            const opposite = pairColor === COLOR_RED ? COLOR_BLACK : COLOR_RED;
+            const conf = Math.min(65, 35 + Math.round(changeRate * 35));
+
+            return {
+                name: 'Pares',
+                color: opposite,
+                confidence: conf,
+                reason: '2x ' + COLOR_NAMES[pairColor] + ' (pares mudam ' + Math.round(changeRate * 100) + '% das vezes)'
+            };
+        }
+
+        return null;
+    }
+
+    // ----- Analisador 5: Previsao de Branco -----
+    // Rastreia intervalos entre brancos e preve quando esta "atrasado".
+    function analyzeWhitePrediction(history) {
+        // Conta rodadas desde o ultimo branco
+        let gap = 0;
+        for (let i = 0; i < history.length; i++) {
+            if (history[i].color === COLOR_WHITE) break;
+            gap++;
+        }
+
+        // Usa media calculada ou padrao
+        const avg = analysis.whiteIntervals.length >= 3
+            ? analysis.whiteIntervals.reduce((a, b) => a + b, 0) / analysis.whiteIntervals.length
+            : analysis.avgWhiteInterval;
+
+        // So preve branco quando o gap e muito grande (2x a media ou 35+ rodadas)
+        const threshold = Math.max(30, Math.round(avg * 2));
+
+        if (gap < threshold) return null;
+
+        // Confianca aumenta com o gap
+        const excess = gap - threshold;
+        const conf = Math.min(72, 48 + excess * 3);
+
+        return {
+            name: 'Branco',
+            color: COLOR_WHITE,
+            confidence: conf,
+            reason: gap + ' rodadas sem branco (media: ' + Math.round(avg) + ', limite: ' + threshold + ')'
+        };
+    }
+
+    // ----- Analisador 6: Ausencia de Cor -----
+    // Se uma cor nao aparece ha muitas rodadas, ela esta "atrasada".
+    function analyzeColorGap(history) {
+        if (history.length < 8) return null;
+
+        let redGap = -1, blackGap = -1;
 
         for (let i = 0; i < history.length; i++) {
-            if (history[i].color === streakColor) {
-                streakCount++;
-            } else {
-                break;
-            }
+            if (history[i].color === COLOR_RED && redGap === -1) redGap = i;
+            if (history[i].color === COLOR_BLACK && blackGap === -1) blackGap = i;
+            if (redGap !== -1 && blackGap !== -1) break;
         }
 
-        // Se ha sequencia de 3+ da mesma cor, aposta na oposta
-        if (streakCount >= 3) {
-            if (streakColor === COLOR_RED) {
-                console.log('[BotBlaze] Sequencia de ' + streakCount + ' vermelhos -> apostando preto');
-                return COLOR_BLACK;
-            }
-            if (streakColor === COLOR_BLACK) {
-                console.log('[BotBlaze] Sequencia de ' + streakCount + ' pretos -> apostando vermelho');
-                return COLOR_RED;
-            }
+        // Se nao encontrou, gap = tamanho do historico
+        if (redGap === -1) redGap = history.length;
+        if (blackGap === -1) blackGap = history.length;
+
+        const maxGap = Math.max(redGap, blackGap);
+        if (maxGap < 5) return null;
+
+        const overdueColor = redGap > blackGap ? COLOR_RED : COLOR_BLACK;
+        // Confianca: 5=60%, 6=66%, 7=70%, 8+=74%
+        const conf = Math.min(74, 35 + maxGap * 6);
+
+        return {
+            name: 'Ausencia',
+            color: overdueColor,
+            confidence: conf,
+            reason: COLOR_NAMES[overdueColor] + ' ausente ha ' + maxGap + ' rodadas'
+        };
+    }
+
+    // ----- Analisador 7: Tendencia Recente -----
+    // Compara ultimos 5 jogos com os 5 anteriores para detectar mudancas de tendencia.
+    function analyzeRecentTrend(history) {
+        if (history.length < 10) return null;
+
+        const recent = history.slice(0, 5);
+        const prev = history.slice(5, 10);
+
+        const rRed = recent.filter(h => h.color === COLOR_RED).length;
+        const rBlack = recent.filter(h => h.color === COLOR_BLACK).length;
+        const pRed = prev.filter(h => h.color === COLOR_RED).length;
+        const pBlack = prev.filter(h => h.color === COLOR_BLACK).length;
+
+        // Reversao: uma cor dominou os anteriores (4+) mas caiu nos recentes (<=2)
+        if (pRed >= 4 && rRed <= 2) {
+            return {
+                name: 'Tendencia',
+                color: COLOR_BLACK,
+                confidence: 55,
+                reason: 'Vermelho dominava (' + pRed + '/5) mas caiu (' + rRed + '/5)'
+            };
+        }
+        if (pBlack >= 4 && rBlack <= 2) {
+            return {
+                name: 'Tendencia',
+                color: COLOR_RED,
+                confidence: 55,
+                reason: 'Preto dominava (' + pBlack + '/5) mas caiu (' + rBlack + '/5)'
+            };
         }
 
-        // Detecta alternancia (vermelho, preto, vermelho, preto...)
-        if (history.length >= 4) {
-            const alt = (
-                history[0].color !== history[1].color &&
-                history[1].color !== history[2].color &&
-                history[2].color !== history[3].color
-            );
-            if (alt) {
-                return history[0].color === COLOR_RED ? COLOR_BLACK : COLOR_RED;
-            }
+        // Momentum: uma cor esta crescendo (mais no recente que no anterior)
+        if (rRed >= 4 && pRed <= 1) {
+            return {
+                name: 'Tendencia',
+                color: COLOR_RED,
+                confidence: 50,
+                reason: 'Vermelho em alta (' + pRed + '/5 -> ' + rRed + '/5)'
+            };
+        }
+        if (rBlack >= 4 && pBlack <= 1) {
+            return {
+                name: 'Tendencia',
+                color: COLOR_BLACK,
+                confidence: 50,
+                reason: 'Preto em alta (' + pBlack + '/5 -> ' + rBlack + '/5)'
+            };
         }
 
-        // Fallback
-        return strategyFrequency(history);
+        return null;
     }
 
     /**
@@ -978,7 +1294,21 @@
 
         // Adiciona ao historico
         state.gameHistory.unshift({ color, timestamp: Date.now() });
-        if (state.gameHistory.length > 50) state.gameHistory.pop();
+        if (state.gameHistory.length > 100) state.gameHistory.pop();
+
+        // Rastreia intervalos do branco
+        if (color === COLOR_WHITE) {
+            if (analysis.roundsSinceWhite > 0) {
+                analysis.whiteIntervals.push(analysis.roundsSinceWhite);
+                if (analysis.whiteIntervals.length > 15) analysis.whiteIntervals.shift();
+                // Recalcula media
+                analysis.avgWhiteInterval = analysis.whiteIntervals.reduce((a, b) => a + b, 0) / analysis.whiteIntervals.length;
+                console.log('[BotBlaze] Branco apareceu! Intervalo: ' + analysis.roundsSinceWhite + ' | Media: ' + Math.round(analysis.avgWhiteInterval));
+            }
+            analysis.roundsSinceWhite = 0;
+        } else {
+            analysis.roundsSinceWhite++;
+        }
 
         // Processa aposta pendente
         if (state.waitingResult && state.currentBetColor !== null) {
@@ -1378,6 +1708,24 @@
                     <span class="bb-stat-label">Historico</span>
                     <span id="bb-history">${state.gameHistory.length} jogos</span>
                 </div>
+                <div style="border-top:1px solid rgba(255,255,255,0.1);margin:4px 0;padding-top:4px;">
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Sinal</span>
+                        <span id="bb-signal" style="font-weight:bold">Analisando...</span>
+                    </div>
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Confianca</span>
+                        <span id="bb-confidence">-</span>
+                    </div>
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Puladas</span>
+                        <span id="bb-skipped">0</span>
+                    </div>
+                    <div class="bb-stat-row">
+                        <span class="bb-stat-label">Branco em</span>
+                        <span id="bb-white-gap">-</span>
+                    </div>
+                </div>
             `;
         }
 
@@ -1435,17 +1783,21 @@
      */
     function updateOverlay() {
         const ids = {
-            status:  document.getElementById('bb-status'),
-            balance: document.getElementById('bb-balance'),
-            profit:  document.getElementById('bb-profit'),
-            bets:    document.getElementById('bb-bets'),
-            wins:    document.getElementById('bb-wins'),
-            losses:  document.getElementById('bb-losses'),
-            phase:   document.getElementById('bb-phase'),
-            mg:      document.getElementById('bb-mg'),
-            lastBet: document.getElementById('bb-last-bet'),
-            history: document.getElementById('bb-history'),
-            toggle:  document.getElementById('bb-toggle')
+            status:     document.getElementById('bb-status'),
+            balance:    document.getElementById('bb-balance'),
+            profit:     document.getElementById('bb-profit'),
+            bets:       document.getElementById('bb-bets'),
+            wins:       document.getElementById('bb-wins'),
+            losses:     document.getElementById('bb-losses'),
+            phase:      document.getElementById('bb-phase'),
+            mg:         document.getElementById('bb-mg'),
+            lastBet:    document.getElementById('bb-last-bet'),
+            history:    document.getElementById('bb-history'),
+            toggle:     document.getElementById('bb-toggle'),
+            signal:     document.getElementById('bb-signal'),
+            confidence: document.getElementById('bb-confidence'),
+            skipped:    document.getElementById('bb-skipped'),
+            whiteGap:   document.getElementById('bb-white-gap')
         };
 
         if (ids.status) {
@@ -1489,6 +1841,42 @@
         }
         if (ids.toggle) {
             ids.toggle.checked = state.botActive;
+        }
+
+        // --- Campos de analise inteligente ---
+        if (ids.signal) {
+            if (analysis.lastDecision !== null) {
+                const colorEmoji = analysis.lastDecision === COLOR_RED ? '\u25CF' :
+                    analysis.lastDecision === COLOR_BLACK ? '\u25CF' : '\u25CB';
+                const colorStyle = analysis.lastDecision === COLOR_RED ? 'color:#ef4444' :
+                    analysis.lastDecision === COLOR_BLACK ? 'color:#6b7280' : 'color:#fbbf24';
+                ids.signal.innerHTML = '<span style="' + colorStyle + '">' + colorEmoji + '</span> ' + COLOR_NAMES[analysis.lastDecision];
+            } else if (analysis.lastSignals.length > 0) {
+                ids.signal.textContent = 'Sem confianca';
+                ids.signal.style.color = '#fbbf24';
+            } else {
+                ids.signal.textContent = 'Sem sinal';
+                ids.signal.style.color = '#9ca3af';
+            }
+        }
+        if (ids.confidence) {
+            const conf = analysis.lastConfidence;
+            if (conf > 0) {
+                const confColor = conf >= 70 ? '#22c55e' : conf >= 55 ? '#fbbf24' : '#ef4444';
+                ids.confidence.innerHTML = '<span style="color:' + confColor + '">' + conf + '%</span>';
+            } else {
+                ids.confidence.textContent = '-';
+            }
+        }
+        if (ids.skipped) {
+            ids.skipped.textContent = analysis.roundsSkipped;
+        }
+        if (ids.whiteGap) {
+            const gap = analysis.roundsSinceWhite;
+            const avg = Math.round(analysis.avgWhiteInterval);
+            const ratio = avg > 0 ? gap / avg : 0;
+            const gapColor = ratio >= 1.5 ? '#ef4444' : ratio >= 1.0 ? '#fbbf24' : '#9ca3af';
+            ids.whiteGap.innerHTML = '<span style="color:' + gapColor + '">' + gap + '</span> <small>(avg ' + avg + ')</small>';
         }
     }
 
