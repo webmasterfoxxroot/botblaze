@@ -1812,65 +1812,23 @@
 
         // Processa aposta pendente
         if (state.waitingResult && state.currentBetColor !== null) {
-            // VERIFICACAO VIA SALDO: confirma se aposta foi efetivada
-            const balanceAfter = readBalance();
-            const balanceDiff = balanceAfter - state.balanceBeforeBet;
-            // Verifica se o saldo mudou significativamente (minimo metade do valor apostado)
-            // Flutuacoes de R$0.01-0.02 sao arredondamento da Blaze, nao apostas
-            const minChange = Math.max(0.03, state.currentBetAmount * 0.4);
-            const betWasPlaced = (state.balanceBeforeBet > 0 && Math.abs(balanceDiff) >= minChange);
-
-            if (!betWasPlaced && state.balanceBeforeBet > 0) {
-                // Saldo nao mudou = aposta NAO foi efetivada na Blaze
-                console.warn('[BotBlaze] APOSTA NAO EFETIVADA! Saldo antes: R$' +
-                    state.balanceBeforeBet.toFixed(2) + ' | Saldo agora: R$' +
-                    balanceAfter.toFixed(2) + ' | Diferenca: R$' + balanceDiff.toFixed(2));
-
-                // Nao conta como loss, reseta estado e tenta novamente
-                state.waitingResult = false;
-                state.currentBetColor = null;
-                state.currentBetAmount = 0;
-                state.sessionBets--; // Desconta a aposta que nao efetivou
-                state.todayBets--;
-
-                // Se fase e betting, tenta apostar de novo
-                if (state.botActive && state.gamePhase === 'betting') {
-                    console.log('[BotBlaze] Tentando apostar novamente na proxima oportunidade...');
-                    setTimeout(() => { onBettingPhase(); }, 1000);
-                }
-
-                saveSessionStats();
-                updateOverlay();
-                // Nao processa como win/loss
-            } else {
-                // Aposta efetivada - calcula resultado
-                // Win/loss pela COMPARACAO DE CORES (saldo pode demorar a atualizar na Blaze)
+                // Calcula resultado pela COMPARACAO DE CORES (metodo mais confiavel)
                 const won = (state.currentBetColor === color);
                 const realWon = won;
 
-                // Calcula lucro
-                let profit;
+                // Calcula lucro teorico (saldo na Blaze tem delay e nao e confiavel)
                 const multiplier = COLOR_MULTIPLIERS[color] || 2;
+                let profit;
                 if (won) {
-                    // Ganhou: usa saldo real se ja atualizou, senao teorico
-                    if (betWasPlaced && balanceDiff > 0) {
-                        profit = balanceDiff;
-                    } else {
-                        profit = state.currentBetAmount * (multiplier - 1);
-                    }
+                    profit = state.currentBetAmount * (multiplier - 1);
                 } else {
-                    // Perdeu: usa saldo real se disponivel, senao teorico
-                    if (betWasPlaced && balanceDiff < 0) {
-                        profit = balanceDiff;
-                    } else {
-                        profit = -state.currentBetAmount;
-                    }
+                    profit = -state.currentBetAmount;
                 }
+
                 console.log('[BotBlaze] Resultado: ' + (won ? 'WIN' : 'LOSS') +
                     ' | Cor apostada: ' + COLOR_NAMES[state.currentBetColor] +
                     ' | Cor resultado: ' + COLOR_NAMES[color] +
-                    ' | Lucro: ' + (profit >= 0 ? '+' : '') + 'R$' + profit.toFixed(2) +
-                    (betWasPlaced ? ' | Saldo: R$' + state.balanceBeforeBet.toFixed(2) + ' -> R$' + balanceAfter.toFixed(2) : ''));
+                    ' | Lucro: ' + (profit >= 0 ? '+' : '') + 'R$' + profit.toFixed(2));
 
                 // Salva nivel antes de alterar (para registrar corretamente)
                 const mgLevelAtBet = state.martingaleLevel;
@@ -1931,7 +1889,7 @@
                         martingale_level: mgLevelAtBet,
                         session_profit: state.sessionProfit,
                         balance_before: state.balanceBeforeBet,
-                        balance_after: balanceAfter,
+                        balance_after: readBalance(),
                         timestamp: new Date().toISOString()
                     }
                 });
