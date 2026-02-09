@@ -134,6 +134,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const settings = {
             bet_amount:           parseFloat(document.getElementById('cfg-bet-amount').value) || 2,
             strategy:             document.getElementById('cfg-strategy').value,
+            min_confidence:       parseInt(document.getElementById('cfg-min-confidence').value) || 60,
+            bet_white:            document.getElementById('cfg-bet-white').checked ? 1 : 0,
             martingale_enabled:   document.getElementById('cfg-martingale').checked ? 1 : 0,
             martingale_max:       parseInt(document.getElementById('cfg-mg-max').value) || 3,
             martingale_multiplier: parseFloat(document.getElementById('cfg-mg-mult').value) || 2.0,
@@ -178,6 +180,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Notifica o content script
         notifyContentScript({ action: 'toggleBot', active: isActive });
     });
+
+    // === STRATEGY HINT ===
+
+    const strategyHints = {
+        conservador: 'Confianca 75%. Pula mais, aposta so com sinal forte.',
+        moderado: 'Confianca 60%. Equilibrio entre seguranca e apostas.',
+        agressivo: 'Confianca 45%. Aposta mais, aceita sinais fracos.'
+    };
+    const strategyConf = { conservador: 75, moderado: 60, agressivo: 45 };
+
+    function updateStrategyHint() {
+        const val = document.getElementById('cfg-strategy').value;
+        const hint = document.getElementById('cfg-strategy-hint');
+        const confInput = document.getElementById('cfg-min-confidence');
+        if (hint && strategyHints[val]) hint.textContent = strategyHints[val];
+        if (confInput && strategyConf[val]) confInput.value = strategyConf[val];
+    }
+
+    document.getElementById('cfg-strategy').addEventListener('change', updateStrategyHint);
 
     // === MARTINGALE TOGGLE ===
 
@@ -257,7 +278,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Carrega configuracoes no formulario
         const s = data.settings || {};
         document.getElementById('cfg-bet-amount').value = s.bet_amount || 2;
-        document.getElementById('cfg-strategy').value = s.strategy || 'frequency';
+        document.getElementById('cfg-strategy').value = s.strategy || 'moderado';
+        document.getElementById('cfg-min-confidence').value = s.min_confidence || 60;
+        document.getElementById('cfg-bet-white').checked = s.bet_white !== 0 && s.bet_white !== false;
         document.getElementById('cfg-martingale').checked = (s.martingale_enabled == 1 || s.martingale_enabled === true);
         document.getElementById('cfg-mg-max').value = s.martingale_max || 3;
         document.getElementById('cfg-mg-mult').value = s.martingale_multiplier || 2.0;
@@ -269,6 +292,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Mostra/esconde opcoes de martingale
         const mgOptions = document.getElementById('martingale-options');
         mgOptions.style.display = (s.martingale_enabled == 1 || s.martingale_enabled === true) ? 'block' : 'none';
+
+        // Atualiza hint da estrategia
+        updateStrategyHint();
 
         // Carrega estatisticas ao vivo do content script
         loadLiveStats();
