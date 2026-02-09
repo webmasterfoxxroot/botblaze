@@ -1221,42 +1221,103 @@
      * Encontra o botao para selecionar uma cor.
      * Usa sistema de pontuacao para encontrar o melhor match.
      */
+    /**
+     * Detecta a cor visual de um elemento (background-color).
+     * Retorna 'red', 'black', 'white' ou null.
+     */
+    function detectElementColor(el) {
+        // Checa o elemento e filhos diretos
+        const targets = [el];
+        if (el.children.length <= 3) {
+            for (const child of el.children) targets.push(child);
+        }
+
+        for (const target of targets) {
+            try {
+                const style = window.getComputedStyle(target);
+                const bg = style.backgroundColor || '';
+                const bgImg = style.backgroundImage || '';
+
+                // Parse RGB
+                const rgbMatch = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (rgbMatch) {
+                    const r = parseInt(rgbMatch[1]);
+                    const g = parseInt(rgbMatch[2]);
+                    const b = parseInt(rgbMatch[3]);
+
+                    // Vermelho: dominancia de R, baixo G e B
+                    if (r > 150 && g < 80 && b < 80) return 'red';
+                    // Branco / Amarelo / Dourado
+                    if (r > 200 && g > 180 && b > 150) return 'white';
+                    if (r > 180 && g > 150 && b < 80) return 'white'; // dourado
+                    // Preto / Cinza escuro
+                    if (r < 60 && g < 60 && b < 60 && bg !== 'rgba(0, 0, 0, 0)') return 'black';
+                    if (r < 80 && g < 80 && b < 100 && r > 10) return 'black'; // cinza escuro / azul escuro
+                }
+
+                // Gradiente vermelho
+                if (bgImg.includes('linear-gradient') && (bgImg.includes('rgb(2') || bgImg.includes('#e6') || bgImg.includes('#f'))) {
+                    return 'red';
+                }
+            } catch (e) {}
+        }
+        return null;
+    }
+
     function findColorButton(color) {
         const allButtons = document.querySelectorAll(
-            'button, [role="button"], [class*="color-button"], [class*="bet-color"], ' +
-            '[class*="roulette-bet"], [class*="double-bet"]'
+            'button, [role="button"], [class*="color"], [class*="bet"], ' +
+            '[class*="roulette"], [class*="double"], a[class*="color"]'
         );
 
         let candidates = [];
+        const targetColorName = color === COLOR_RED ? 'red' : color === COLOR_BLACK ? 'black' : 'white';
 
         allButtons.forEach((btn) => {
             if (!btn.offsetParent) return; // nao visivel
 
             const text = (btn.textContent || '').toLowerCase().trim();
-            const cls  = (btn.className || '').toLowerCase();
+            const cls  = (btn.className || '').toString().toLowerCase();
             const dc = btn.getAttribute('data-color') || btn.getAttribute('data-value') || '';
+            const style = (btn.getAttribute('style') || '').toLowerCase();
 
             let score = 0;
 
+            // 1. Data attributes (mais confiavel)
+            if (color === COLOR_RED && (dc === '1' || dc === 'red' || dc === 'vermelho')) score += 15;
+            if (color === COLOR_BLACK && (dc === '2' || dc === 'black' || dc === 'preto')) score += 15;
+            if (color === COLOR_WHITE && (dc === '0' || dc === 'white' || dc === 'branco')) score += 15;
+
+            // 2. Classes CSS
             if (color === COLOR_RED) {
-                if (dc === '1' || dc === 'red') score += 10;
-                if (cls.includes('red') || cls.includes('vermelho')) score += 5;
-                if (text.includes('vermelho')) score += 3;
-                if (text.includes('x2') && (cls.includes('red') || !cls.includes('black'))) score += 1;
+                if (cls.includes('red') || cls.includes('vermelho')) score += 8;
             }
-
             if (color === COLOR_BLACK) {
-                if (dc === '2' || dc === 'black') score += 10;
-                if (cls.includes('black') || cls.includes('preto') || cls.includes('dark')) score += 5;
-                if (text.includes('preto')) score += 3;
-                if (text.includes('x2') && cls.includes('black')) score += 1;
+                if (cls.includes('black') || cls.includes('preto') || cls.includes('dark')) score += 8;
+            }
+            if (color === COLOR_WHITE) {
+                if (cls.includes('white') || cls.includes('branco') || cls.includes('gold')) score += 8;
             }
 
-            if (color === COLOR_WHITE) {
-                if (dc === '0' || dc === 'white') score += 10;
-                if (cls.includes('white') || cls.includes('branco')) score += 5;
-                if (text.includes('branco') || text.includes('x14')) score += 3;
+            // 3. Texto do botao
+            if (color === COLOR_RED && text.includes('vermelho')) score += 5;
+            if (color === COLOR_BLACK && text.includes('preto')) score += 5;
+            if (color === COLOR_WHITE && (text.includes('branco') || text === 'x14')) score += 8;
+
+            // 4. x14 = sempre branco
+            if (text.includes('x14') && color === COLOR_WHITE) score += 10;
+
+            // 5. Cor visual do elemento (background-color)
+            if (score === 0 || text.includes('x2') || text.includes('x14')) {
+                const visualColor = detectElementColor(btn);
+                if (visualColor === targetColorName) score += 7;
+                // Penaliza se cor visual nao bate
+                if (visualColor && visualColor !== targetColorName) score -= 5;
             }
+
+            // 6. Style inline
+            if (color === COLOR_RED && (style.includes('#e63946') || style.includes('#ef4444') || style.includes('#ff'))) score += 5;
+            if (color === COLOR_BLACK && (style.includes('#333') || style.includes('#1a1a') || style.includes('#0d0d'))) score += 5;
 
             if (score > 0) {
                 candidates.push({ el: btn, score: score });
@@ -1264,7 +1325,53 @@
         });
 
         candidates.sort((a, b) => b.score - a.score);
-        return candidates.length > 0 ? candidates[0].el : null;
+
+        if (candidates.length > 0) {
+            console.log('[BotBlaze] findColorButton(' + COLOR_NAMES[color] + '): melhor score=' + candidates[0].score +
+                ', classe=' + (candidates[0].el.className || '').substring(0, 60) +
+                ', texto=' + (candidates[0].el.textContent || '').trim().substring(0, 20));
+            return candidates[0].el;
+        }
+
+        // Fallback final: busca botoes x2/x14 por posicao
+        // Na Blaze, ordem e: Vermelho(x2) | Branco(x14) | Preto(x2)
+        const x2Buttons = [];
+        let x14Button = null;
+
+        allButtons.forEach((btn) => {
+            if (!btn.offsetParent) return;
+            const text = (btn.textContent || '').trim().toLowerCase();
+            if (text === 'x14' || text.includes('x14')) {
+                x14Button = btn;
+            } else if (text === 'x2' || text.includes('x2')) {
+                x2Buttons.push(btn);
+            }
+        });
+
+        if (color === COLOR_WHITE && x14Button) {
+            console.log('[BotBlaze] findColorButton: Branco via fallback x14');
+            return x14Button;
+        }
+
+        if ((color === COLOR_RED || color === COLOR_BLACK) && x2Buttons.length >= 2) {
+            // Ordena por posicao horizontal (left)
+            x2Buttons.sort((a, b) => {
+                const ra = a.getBoundingClientRect();
+                const rb = b.getBoundingClientRect();
+                return ra.left - rb.left;
+            });
+            // Primeiro (esquerda) = vermelho, ultimo (direita) = preto
+            if (color === COLOR_RED) {
+                console.log('[BotBlaze] findColorButton: Vermelho via fallback posicao (esquerda)');
+                return x2Buttons[0];
+            } else {
+                console.log('[BotBlaze] findColorButton: Preto via fallback posicao (direita)');
+                return x2Buttons[x2Buttons.length - 1];
+            }
+        }
+
+        console.warn('[BotBlaze] findColorButton: NENHUM botao encontrado para ' + COLOR_NAMES[color]);
+        return null;
     }
 
     /**
@@ -1288,11 +1395,13 @@
         }
 
         // Fallback: procura botoes com texto relevante
-        const buttons = document.querySelectorAll('button');
+        const buttons = document.querySelectorAll('button, a[role="button"], [class*="button"]');
         for (const btn of buttons) {
             const text = (btn.textContent || '').toLowerCase().trim();
             if (
-                (text.includes('apostar') || text.includes('confirmar') || text.includes('bet') || text === 'ok') &&
+                (text.includes('apostar') || text.includes('confirmar') || text.includes('bet') ||
+                 text.includes('comecar o jogo') || text.includes('começar o jogo') ||
+                 text.includes('comecar') || text.includes('começar') || text === 'ok') &&
                 !btn.disabled && btn.offsetParent !== null
             ) {
                 return btn;
@@ -1534,6 +1643,8 @@
 
     /**
      * Polling de backup a cada 3 segundos.
+     * Tambem funciona como fallback para apostar quando a fase nao "muda"
+     * (ex: fase fica em 'betting' o tempo todo e onBettingPhase nao e disparado).
      */
     function startPolling() {
         setInterval(() => {
@@ -1552,6 +1663,18 @@
                 }
 
                 checkForNewResults();
+
+                // Fallback: se fase e betting, bot ativo, nao esperando resultado
+                // e ja passou tempo suficiente, tenta apostar novamente.
+                // Resolve o bug onde a fase fica presa em 'betting' e onBettingPhase
+                // nunca e chamado porque a fase nao "muda".
+                if (state.botActive && state.gamePhase === 'betting' &&
+                    !state.waitingResult &&
+                    Date.now() - state.lastBetTime >= MIN_BET_INTERVAL) {
+                    console.log('[BotBlaze] [Poll] Fallback: tentando apostar na fase betting');
+                    onBettingPhase();
+                }
+
                 updateOverlay();
             } catch (e) {
                 console.error('[BotBlaze] Erro no polling:', e);
