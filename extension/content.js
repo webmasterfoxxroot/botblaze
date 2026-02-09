@@ -91,6 +91,9 @@
         // Cooldown apos martingale estourar (pula rodadas)
         _mgCooldown: 0,
 
+        // Evita polling spam quando confianca baixa (1x por rodada)
+        _pollSkippedThisRound: false,
+
         // Controle de deteccao de novos resultados
         lastHistorySignature: '',
 
@@ -1542,6 +1545,7 @@
      */
     function onNewResult(color) {
         console.log('[BotBlaze] Novo resultado: ' + COLOR_NAMES[color]);
+        state._pollSkippedThisRound = false; // Nova rodada, permite polling novamente
 
         // Adiciona ao historico
         state.gameHistory.unshift({ color, timestamp: Date.now() });
@@ -1766,10 +1770,11 @@
                 // e ja passou tempo suficiente, tenta apostar novamente.
                 // Resolve o bug onde a fase fica presa em 'betting' e onBettingPhase
                 // nunca e chamado porque a fase nao "muda".
+                // So tenta 1x por historico (evita spam quando confianca baixa)
                 if (state.botActive && state.gamePhase === 'betting' &&
-                    !state.waitingResult &&
+                    !state.waitingResult && !state._pollSkippedThisRound &&
                     Date.now() - state.lastBetTime >= MIN_BET_INTERVAL) {
-                    console.log('[BotBlaze] [Poll] Fallback: tentando apostar na fase betting');
+                    state._pollSkippedThisRound = true;
                     onBettingPhase();
                 }
 
@@ -2346,19 +2351,30 @@
         });
     }
 
+    let _contextValid = true;
+
     function sendMessage(msg) {
+        if (!_contextValid) return Promise.resolve({});
         return new Promise((resolve) => {
             try {
+                if (!chrome.runtime || !chrome.runtime.id) {
+                    _contextValid = false;
+                    resolve({});
+                    return;
+                }
                 chrome.runtime.sendMessage(msg, (response) => {
                     if (chrome.runtime.lastError) {
-                        console.warn('[BotBlaze] Erro ao enviar mensagem:', chrome.runtime.lastError.message);
+                        const errMsg = chrome.runtime.lastError.message || '';
+                        if (errMsg.includes('invalidated') || errMsg.includes('Extension context')) {
+                            _contextValid = false;
+                        }
                         resolve({});
                         return;
                     }
                     resolve(response || {});
                 });
             } catch (e) {
-                console.warn('[BotBlaze] Erro ao enviar mensagem:', e);
+                if (String(e).includes('invalidated')) _contextValid = false;
                 resolve({});
             }
         });
