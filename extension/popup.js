@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Mostra a tela principal com configuracoes e estatisticas.
      */
-    function showMainView(data) {
+    async function showMainView(data) {
         viewLogin.style.display = 'none';
         viewNoSub.style.display = 'none';
         viewMain.style.display  = 'block';
