@@ -1314,117 +1314,80 @@
     }
 
     function findColorButton(color) {
-        const allButtons = document.querySelectorAll(
-            'button, [role="button"], [class*="color"], [class*="bet"], ' +
-            '[class*="roulette"], [class*="double"], a[class*="color"]'
+        const targetClass = color === COLOR_RED ? 'red' : color === COLOR_BLACK ? 'black' : 'white';
+
+        // 1. METODO PRINCIPAL: Seletores especificos da Blaze
+        // Estrutura: .double-button-wrapper > div.red / div.black / div.white
+        const directSelectors = [
+            '.double-button-wrapper > div.' + targetClass,
+            '.double-button-wrapper > .' + targetClass,
+            '.double-button-wrapper .' + targetClass
+        ];
+
+        for (const sel of directSelectors) {
+            try {
+                const els = document.querySelectorAll(sel);
+                for (const el of els) {
+                    if (el.offsetParent !== null) {
+                        console.log('[BotBlaze] findColorButton(' + COLOR_NAMES[color] + '): direto via "' + sel + '"');
+                        return el;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 2. Busca div com classe exata da cor dentro da area de aposta
+        const betArea = document.querySelector('.controller, [class*="controller"], .input-wrapper, [class*="input-wrapper"]');
+        if (betArea) {
+            const colorDivs = betArea.querySelectorAll('div.' + targetClass + ', [class~="' + targetClass + '"]');
+            for (const el of colorDivs) {
+                if (el.offsetParent !== null) {
+                    const text = (el.textContent || '').toLowerCase().trim();
+                    // Deve conter x2 ou x14 (sao botoes de aposta)
+                    if (text.includes('x2') || text.includes('x14')) {
+                        console.log('[BotBlaze] findColorButton(' + COLOR_NAMES[color] + '): via area de aposta');
+                        return el;
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback generico: qualquer div/button visivel com classe da cor E texto x2/x14
+        const allEls = document.querySelectorAll(
+            'div.' + targetClass + ', button.' + targetClass + ', ' +
+            '[class~="' + targetClass + '"], [data-color="' + targetClass + '"]'
         );
+        let best = null;
+        let bestScore = 0;
 
-        let candidates = [];
-        const targetColorName = color === COLOR_RED ? 'red' : color === COLOR_BLACK ? 'black' : 'white';
-
-        allButtons.forEach((btn) => {
-            if (!btn.offsetParent) return; // nao visivel
-
-            const text = (btn.textContent || '').toLowerCase().trim();
-            const cls  = (btn.className || '').toString().toLowerCase();
-            const dc = btn.getAttribute('data-color') || btn.getAttribute('data-value') || '';
-            const style = (btn.getAttribute('style') || '').toLowerCase();
-
-            // Ignora botoes que nao sao de selecao de cor
-            if (text.includes('depositar') || text.includes('sacar') || text.includes('deposit') ||
-                text.includes('withdraw') || text.includes('entrar') || text.includes('login') ||
-                text.includes('cadastr') || text.includes('menu') || text.includes('saldo') ||
-                text.includes('começar') || text.includes('comecar') || text.includes('start') ||
-                text.includes('confirmar') || text.includes('apostar') || text.includes('place bet') ||
-                cls.includes('shared-button') || cls.includes('place-bet')) return;
-
+        for (const el of allEls) {
+            if (!el.offsetParent) continue;
+            const text = (el.textContent || '').toLowerCase().trim();
+            const cls = (el.className || '').toString().toLowerCase();
             let score = 0;
 
-            // 1. Data attributes (mais confiavel)
-            if (color === COLOR_RED && (dc === '1' || dc === 'red' || dc === 'vermelho')) score += 15;
-            if (color === COLOR_BLACK && (dc === '2' || dc === 'black' || dc === 'preto')) score += 15;
-            if (color === COLOR_WHITE && (dc === '0' || dc === 'white' || dc === 'branco')) score += 15;
+            // Tem x2 ou x14 = provavelmente botao de aposta
+            if (text.includes('x2') || text.includes('x14')) score += 10;
+            // Dentro de double-button-wrapper = certeza
+            if (el.closest('.double-button-wrapper')) score += 20;
+            // Dentro de area de controle
+            if (el.closest('.controller') || el.closest('[class*="controller"]')) score += 5;
+            // Classe exata da cor (nao substring)
+            if (cls.split(/\s+/).includes(targetClass)) score += 5;
+            // Ignora resultados da roleta e outros elementos
+            if (cls.includes('roulette') || cls.includes('column') || cls.includes('result') ||
+                cls.includes('history') || cls.includes('giros')) score -= 50;
 
-            // 2. Classes CSS
-            if (color === COLOR_RED) {
-                if (cls.includes('red') || cls.includes('vermelho')) score += 8;
+            if (score > bestScore) {
+                bestScore = score;
+                best = el;
             }
-            if (color === COLOR_BLACK) {
-                if (cls.includes('black') || cls.includes('preto') || cls.includes('dark')) score += 8;
-            }
-            if (color === COLOR_WHITE) {
-                if (cls.includes('white') || cls.includes('branco') || cls.includes('gold')) score += 8;
-            }
-
-            // 3. Texto do botao
-            if (color === COLOR_RED && text.includes('vermelho')) score += 5;
-            if (color === COLOR_BLACK && text.includes('preto')) score += 5;
-            if (color === COLOR_WHITE && (text.includes('branco') || text === 'x14')) score += 8;
-
-            // 4. x14 = sempre branco
-            if (text.includes('x14') && color === COLOR_WHITE) score += 10;
-
-            // 5. Cor visual do elemento (background-color)
-            if (score === 0 || text.includes('x2') || text.includes('x14')) {
-                const visualColor = detectElementColor(btn);
-                if (visualColor === targetColorName) score += 7;
-                // Penaliza se cor visual nao bate
-                if (visualColor && visualColor !== targetColorName) score -= 5;
-            }
-
-            // 6. Style inline
-            if (color === COLOR_RED && (style.includes('#e63946') || style.includes('#ef4444') || style.includes('#ff'))) score += 5;
-            if (color === COLOR_BLACK && (style.includes('#333') || style.includes('#1a1a') || style.includes('#0d0d'))) score += 5;
-
-            if (score > 0) {
-                candidates.push({ el: btn, score: score });
-            }
-        });
-
-        candidates.sort((a, b) => b.score - a.score);
-
-        if (candidates.length > 0) {
-            console.log('[BotBlaze] findColorButton(' + COLOR_NAMES[color] + '): melhor score=' + candidates[0].score +
-                ', classe=' + (candidates[0].el.className || '').substring(0, 60) +
-                ', texto=' + (candidates[0].el.textContent || '').trim().substring(0, 20));
-            return candidates[0].el;
         }
 
-        // Fallback final: busca botoes x2/x14 por posicao
-        // Na Blaze, ordem e: Vermelho(x2) | Branco(x14) | Preto(x2)
-        const x2Buttons = [];
-        let x14Button = null;
-
-        allButtons.forEach((btn) => {
-            if (!btn.offsetParent) return;
-            const text = (btn.textContent || '').trim().toLowerCase();
-            if (text === 'x14' || text.includes('x14')) {
-                x14Button = btn;
-            } else if (text === 'x2' || text.includes('x2')) {
-                x2Buttons.push(btn);
-            }
-        });
-
-        if (color === COLOR_WHITE && x14Button) {
-            console.log('[BotBlaze] findColorButton: Branco via fallback x14');
-            return x14Button;
-        }
-
-        if ((color === COLOR_RED || color === COLOR_BLACK) && x2Buttons.length >= 2) {
-            // Ordena por posicao horizontal (left)
-            x2Buttons.sort((a, b) => {
-                const ra = a.getBoundingClientRect();
-                const rb = b.getBoundingClientRect();
-                return ra.left - rb.left;
-            });
-            // Primeiro (esquerda) = vermelho, ultimo (direita) = preto
-            if (color === COLOR_RED) {
-                console.log('[BotBlaze] findColorButton: Vermelho via fallback posicao (esquerda)');
-                return x2Buttons[0];
-            } else {
-                console.log('[BotBlaze] findColorButton: Preto via fallback posicao (direita)');
-                return x2Buttons[x2Buttons.length - 1];
-            }
+        if (best) {
+            console.log('[BotBlaze] findColorButton(' + COLOR_NAMES[color] + '): fallback score=' + bestScore +
+                ', classe=' + (best.className || '').toString().substring(0, 60));
+            return best;
         }
 
         console.warn('[BotBlaze] findColorButton: NENHUM botao encontrado para ' + COLOR_NAMES[color]);
