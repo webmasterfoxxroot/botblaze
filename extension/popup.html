@@ -107,10 +107,11 @@
             <div class="form-group">
                 <label>Estrategia</label>
                 <select id="cfg-strategy">
-                    <option value="frequency">Frequencia de Cor</option>
-                    <option value="martingale">Martingale</option>
-                    <option value="pattern">Padrao / Sequencia</option>
+                    <option value="conservador">Conservador - Menos apostas</option>
+                    <option value="moderado" selected>Moderado - Equilibrado</option>
+                    <option value="agressivo">Agressivo - Mais apostas</option>
                 </select>
+                <p class="hint" id="cfg-strategy-hint" style="font-size:10px;color:#8b949e;margin-top:4px;">Analisa 7 padroes e so aposta com confianca alta</p>
             </div>
 
             <div class="subsection">
@@ -134,6 +135,22 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="subsection">
+                <div class="row-between">
+                    <span>Apostar no Branco (x14)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="cfg-bet-white" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Confianca Minima (%)</label>
+                <input type="number" id="cfg-min-confidence" min="30" max="90" step="5" value="60">
+                <p class="hint" style="font-size:10px;color:#8b949e;margin-top:4px;">So aposta quando a confianca dos sinais atinge este %</p>
             </div>
 
             <div class="form-row">
