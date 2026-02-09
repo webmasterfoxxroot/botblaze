@@ -1844,24 +1844,33 @@
                 // Nao processa como win/loss
             } else {
                 // Aposta efetivada - calcula resultado
+                // Win/loss pela COMPARACAO DE CORES (saldo pode demorar a atualizar na Blaze)
                 const won = (state.currentBetColor === color);
+                const realWon = won;
 
-                // Usa saldo para calcular lucro REAL se possivel
+                // Calcula lucro
                 let profit;
-                if (state.balanceBeforeBet > 0 && betWasPlaced) {
-                    profit = balanceDiff; // Lucro real baseado no saldo
-                    console.log('[BotBlaze] Saldo: R$' + state.balanceBeforeBet.toFixed(2) +
-                        ' -> R$' + balanceAfter.toFixed(2) + ' (real: ' + (profit >= 0 ? '+' : '') + 'R$' + profit.toFixed(2) + ')');
+                const multiplier = COLOR_MULTIPLIERS[color] || 2;
+                if (won) {
+                    // Ganhou: usa saldo real se ja atualizou, senao teorico
+                    if (betWasPlaced && balanceDiff > 0) {
+                        profit = balanceDiff;
+                    } else {
+                        profit = state.currentBetAmount * (multiplier - 1);
+                    }
                 } else {
-                    // Fallback: calculo teorico
-                    const multiplier = COLOR_MULTIPLIERS[color] || 2;
-                    profit = won
-                        ? state.currentBetAmount * (multiplier - 1)
-                        : -state.currentBetAmount;
+                    // Perdeu: usa saldo real se disponivel, senao teorico
+                    if (betWasPlaced && balanceDiff < 0) {
+                        profit = balanceDiff;
+                    } else {
+                        profit = -state.currentBetAmount;
+                    }
                 }
-
-                // Determina win/loss pelo saldo (mais preciso que comparar cores)
-                const realWon = betWasPlaced ? (balanceDiff > 0) : won;
+                console.log('[BotBlaze] Resultado: ' + (won ? 'WIN' : 'LOSS') +
+                    ' | Cor apostada: ' + COLOR_NAMES[state.currentBetColor] +
+                    ' | Cor resultado: ' + COLOR_NAMES[color] +
+                    ' | Lucro: ' + (profit >= 0 ? '+' : '') + 'R$' + profit.toFixed(2) +
+                    (betWasPlaced ? ' | Saldo: R$' + state.balanceBeforeBet.toFixed(2) + ' -> R$' + balanceAfter.toFixed(2) : ''));
 
                 // Salva nivel antes de alterar (para registrar corretamente)
                 const mgLevelAtBet = state.martingaleLevel;
