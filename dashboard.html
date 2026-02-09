@@ -329,12 +329,8 @@
             }
 
             const d = checkData.diagnostics;
-            if (!d.zip_available) {
-                showToast('Erro: Modulo ZIP nao ativo no PHP. Ative php_zip.dll no php.ini');
-                return;
-            }
-            if (!d.temp_writable) {
-                showToast('Erro: Pasta temporaria sem permissao de escrita');
+            if (!d.ext_dir_exists) {
+                showToast('Erro: Pasta extension/ nao encontrada no servidor');
                 return;
             }
             if (!d.has_subscription) {
