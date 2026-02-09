@@ -62,6 +62,19 @@ CREATE TABLE IF NOT EXISTS user_settings (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Sessoes (permite multiplos tokens por usuario: web + extensao + admin)
+CREATE TABLE IF NOT EXISTS sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    device_type VARCHAR(20) DEFAULT 'web',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_token (token),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB;
+
 -- Historico de apostas (registrado pela extensao)
 CREATE TABLE IF NOT EXISTS bet_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -100,6 +113,21 @@ FROM dual WHERE NOT EXISTS (SELECT 1 FROM subscriptions WHERE user_id = 1);
 -- Settings padrao do admin
 INSERT INTO user_settings (user_id) VALUES (1)
 ON DUPLICATE KEY UPDATE user_id = user_id;
+
+-- ── MIGRATION: Cria tabela sessions (execute se nao existir) ─────────────────
+-- CREATE TABLE IF NOT EXISTS sessions (
+--     id INT AUTO_INCREMENT PRIMARY KEY,
+--     user_id INT NOT NULL,
+--     token VARCHAR(64) NOT NULL UNIQUE,
+--     device_type VARCHAR(20) DEFAULT 'web',
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+--     INDEX idx_token (token),
+--     INDEX idx_user (user_id)
+-- ) ENGINE=InnoDB;
+-- Se o usuario ja tem token na coluna api_token, migra para a tabela sessions:
+-- INSERT IGNORE INTO sessions (user_id, token, device_type) SELECT id, api_token, 'web' FROM users WHERE api_token IS NOT NULL;
 
 -- ── MIGRATION: Atualiza tabela existente para novo sistema de estrategias ────
 -- Execute estas queries se a tabela ja existir:

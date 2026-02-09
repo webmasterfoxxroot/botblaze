@@ -75,7 +75,7 @@ async function apiCall(endpoint, method, body, token) {
  * Login: envia credenciais para a API, armazena token e dados do usuario.
  */
 async function handleLogin({ email, password }) {
-    const data = await apiCall('/auth.php', 'POST', { action: 'login', email, password });
+    const data = await apiCall('/auth.php', 'POST', { action: 'login', email, password, device_type: 'extension' });
 
     if (!data.success) {
         return { success: false, error: data.error || 'Credenciais invalidas' };
@@ -114,9 +114,9 @@ async function handleCheckAuth() {
         const data = await apiCall('/auth.php', 'POST', { action: 'validate' }, store.api_token);
 
         if (!data.success) {
-            // Token expirado ou invalido
+            // Token desta sessao expirou ou foi invalidado
             if (data.status === 401) {
-                await storageRemove(['api_token', 'is_authenticated', 'user', 'subscription']);
+                await storageRemove(['api_token', 'is_authenticated', 'user', 'subscription', 'bot_settings']);
             }
             return { success: false, authenticated: false, error: data.error || 'Sessao expirada' };
         }
@@ -231,9 +231,13 @@ async function handleRecordBet(bet) {
 async function handleLogout() {
     const store = await storageGet(['api_token']);
 
-    // Tenta invalidar o token na API (nao bloqueia se falhar)
+    // Invalida apenas ESTA sessao na API (nao afeta sessoes web/admin)
     if (store.api_token) {
-        apiCall('/auth.php', 'POST', { action: 'logout' }, store.api_token).catch(() => {});
+        try {
+            await apiCall('/auth.php', 'POST', { action: 'logout' }, store.api_token);
+        } catch (e) {
+            // Silencioso - logout local prossegue mesmo se API falhar
+        }
     }
 
     await storageRemove([

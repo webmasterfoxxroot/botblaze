@@ -31,8 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newStatus = $target['status'] === 'active' ? 'blocked' : 'active';
             $db->prepare("UPDATE users SET status = ? WHERE id = ?")->execute([$newStatus, $targetId]);
 
-            // Invalidate token if blocking
+            // Invalidate all sessions if blocking
             if ($newStatus === 'blocked') {
+                deleteAllSessions($targetId);
                 $db->prepare("UPDATE users SET api_token = NULL WHERE id = ?")->execute([$targetId]);
             }
 

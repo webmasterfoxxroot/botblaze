@@ -59,7 +59,8 @@
                 body: JSON.stringify({
                     action: 'login',
                     email: form.get('email'),
-                    password: form.get('password')
+                    password: form.get('password'),
+                    device_type: 'web'
                 })
             });
             const data = await res.json();
