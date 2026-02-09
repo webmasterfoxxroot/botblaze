@@ -5,11 +5,7 @@ require_once __DIR__ . '/config.php';
 $user = validateToken();
 $db = getDB();
 
-// Require active subscription
 $subscription = hasActiveSubscription($user['id']);
-if (!$subscription) {
-    jsonResponse(['error' => 'Assinatura ativa necessaria para acessar historico'], 403);
-}
 
 // ── GET: Return bet history + stats ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {

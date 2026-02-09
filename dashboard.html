@@ -5,6 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - BotBlaze</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* ── GREETING ────────────────────────────────────── */
+        .greeting { margin-bottom: 28px; }
+        .greeting h1 { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+        .greeting p { color: var(--text-muted); font-size: 14px; }
+
+        /* ── SUB CARD ────────────────────────────────────── */
+        .sub-card { display: flex; align-items: center; gap: 20px; padding: 20px 24px; border-radius: 14px; margin-bottom: 24px; }
+        .sub-card-active { background: linear-gradient(135deg, rgba(46,204,113,.08), rgba(46,204,113,.02)); border: 1px solid rgba(46,204,113,.2); }
+        .sub-card-none { background: linear-gradient(135deg, rgba(210,153,34,.08), rgba(210,153,34,.02)); border: 1px solid rgba(210,153,34,.2); }
+        .sub-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .sub-icon-active { background: rgba(46,204,113,.15); color: #2ecc71; }
+        .sub-icon-none { background: rgba(210,153,34,.15); color: #d29922; }
+        .sub-info { flex: 1; min-width: 0; }
+        .sub-info h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+        .sub-info p { font-size: 13px; color: var(--text-muted); }
+        .sub-badge { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .sub-badge-active { background: rgba(46,204,113,.15); color: #2ecc71; }
+        .sub-badge-none { background: rgba(210,153,34,.15); color: #d29922; }
+
+        /* ── STAT CARDS (enhanced) ───────────────────────── */
+        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+        .s-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; display: flex; align-items: flex-start; gap: 14px; transition: border-color .2s; }
+        .s-card:hover { border-color: rgba(255,255,255,.1); }
+        .s-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .s-icon svg { width: 20px; height: 20px; }
+        .s-icon-default { background: rgba(255,255,255,.06); color: var(--text-muted); }
+        .s-icon-green { background: rgba(46,204,113,.12); color: #2ecc71; }
+        .s-icon-red { background: rgba(248,81,73,.12); color: #f85149; }
+        .s-icon-gold { background: rgba(210,153,34,.12); color: #d29922; }
+        .s-icon-blue { background: rgba(88,166,255,.12); color: #58a6ff; }
+        .s-data {}
+        .s-value { font-size: 22px; font-weight: 800; line-height: 1.2; }
+        .s-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .s-value-green { color: var(--green); }
+        .s-value-red { color: var(--red); }
+        .s-value-gold { color: var(--gold); }
+
+        /* ── SECTION HEADER ──────────────────────────────── */
+        .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .section-head h2 { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .section-head h2 svg { opacity: .4; }
+        .tab-row { display: flex; gap: 4px; }
+        .tab-btn { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 600; transition: all .15s; }
+        .tab-btn:hover { color: var(--text); border-color: rgba(255,255,255,.15); }
+        .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        /* ── BET HISTORY TABLE ────────────────────────────── */
+        .hist-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+        .hist-card .section-head { padding: 18px 20px 0; }
+        .hist-table { width: 100%; border-collapse: collapse; }
+        .hist-table th { padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 600; text-align: left; border-bottom: 1px solid var(--border); }
+        .hist-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.03); }
+        .hist-table tr:last-child td { border-bottom: none; }
+        .hist-table tr:hover td { background: rgba(255,255,255,.02); }
+
+        .color-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .color-badge-1 { background: rgba(230,57,70,.12); color: #e63946; }
+        .color-badge-2 { background: rgba(255,255,255,.06); color: var(--text-muted); }
+        .color-badge-0 { background: rgba(255,255,255,.12); color: #f0f0f0; }
+        .color-badge::before { content: ''; width: 8px; height: 8px; border-radius: 50%; }
+        .color-badge-1::before { background: #e63946; }
+        .color-badge-2::before { background: #444; }
+        .color-badge-0::before { background: #f0f0f0; }
+
+        .result-badge { padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+        .result-win { background: rgba(46,204,113,.12); color: #2ecc71; }
+        .result-loss { background: rgba(248,81,73,.12); color: #f85149; }
+        .result-pending { background: rgba(210,153,34,.12); color: #d29922; }
+
+        .profit-pos { color: var(--green); font-weight: 600; }
+        .profit-neg { color: var(--red); font-weight: 600; }
+        .mg-badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(88,166,255,.1); color: var(--blue); font-weight: 600; }
+
+        .empty-hist { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+        .empty-hist svg { opacity: .15; margin-bottom: 12px; }
+        .empty-hist p { font-size: 14px; }
+
+        /* ── EXTENSION CARD ──────────────────────────────── */
+        .ext-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .ext-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+        .ext-step { background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+        .ext-step-num { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+        .ext-step p { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+        .ext-step strong { color: var(--text); }
+
+        .token-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; }
+        .token-row code { flex: 1; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .token-row button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; transition: all .15s; flex-shrink: 0; }
+        .token-row button:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── TOAST ────────────────────────────────────────── */
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px; color: #fff; font-size: 13px; font-weight: 600; z-index: 2000; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); animation: toastIn .3s ease; }
+        .toast-success { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @media (max-width: 768px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .ext-steps { grid-template-columns: 1fr; }
+            .sub-card { flex-direction: column; text-align: center; }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -12,98 +114,110 @@
         <ul class="navbar-nav">
             <li><a href="dashboard.html">Dashboard</a></li>
             <li><a href="settings.html">Configuracoes</a></li>
+            <li id="admin-link" style="display:none;"><a href="admin.html">Admin</a></li>
             <li><a href="#" id="logout-btn">Sair</a></li>
         </ul>
     </nav>
 
     <div class="container dashboard">
-        <div class="page-header">
-            <h1>Dashboard</h1>
-            <div>
-                <span class="badge badge-green" id="sub-status">Carregando...</span>
-                <span id="user-name" style="margin-left: 12px; color: var(--text-muted); font-size: 14px;"></span>
-            </div>
+        <!-- Greeting -->
+        <div class="greeting">
+            <h1 id="greeting-text">Ola!</h1>
+            <p>Acompanhe seus resultados e gerencie o bot</p>
         </div>
 
-        <!-- Subscription Alert -->
-        <div id="no-sub-alert" class="alert alert-warning" style="display:none;">
-            Voce nao tem uma assinatura ativa. <a href="plans.html">Escolha um plano</a> para usar a extensao.
-        </div>
-
-        <!-- Extension Download -->
-        <div id="extension-card" class="card" style="display:none;">
-            <div class="card-header">
-                <h2>Extensao Chrome</h2>
-                <span class="badge badge-blue">v1.0.0</span>
-            </div>
-            <p style="color: var(--text-muted); margin-bottom: 16px;">
-                Baixe a extensao e instale no Chrome para comecar a usar o bot.
-            </p>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <div class="card" style="flex: 1; min-width: 200px; text-align: center; padding: 16px;">
-                    <div style="font-size: 24px; margin-bottom: 8px;">1</div>
-                    <p style="font-size: 13px; color: var(--text-muted);">Baixe a pasta <strong>extension/</strong> do projeto</p>
-                </div>
-                <div class="card" style="flex: 1; min-width: 200px; text-align: center; padding: 16px;">
-                    <div style="font-size: 24px; margin-bottom: 8px;">2</div>
-                    <p style="font-size: 13px; color: var(--text-muted);">Abra <strong>chrome://extensions</strong></p>
-                </div>
-                <div class="card" style="flex: 1; min-width: 200px; text-align: center; padding: 16px;">
-                    <div style="font-size: 24px; margin-bottom: 8px;">3</div>
-                    <p style="font-size: 13px; color: var(--text-muted);">Ative <strong>Modo Desenvolvedor</strong> e carregue a pasta</p>
-                </div>
-            </div>
-            <p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
-                Seu token de API: <code id="api-token" style="background: var(--bg-input); padding: 4px 8px; border-radius: 4px; font-size: 12px;">---</code>
-                <button class="btn btn-sm btn-outline" onclick="copyToken()" style="margin-left: 8px;">Copiar</button>
-            </p>
-        </div>
+        <!-- Subscription Status -->
+        <div id="sub-card"></div>
 
         <!-- Stats -->
-        <div class="stats-grid" id="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="stat-total-bets">0</div>
-                <div class="stat-label">Apostas Hoje</div>
+        <div class="section-head">
+            <h2>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                Estatisticas
+            </h2>
+            <div class="tab-row">
+                <button class="tab-btn active" onclick="switchStats('today')">Hoje</button>
+                <button class="tab-btn" onclick="switchStats('all')">Total</button>
             </div>
-            <div class="stat-card stat-green">
-                <div class="stat-value" id="stat-wins">0</div>
-                <div class="stat-label">Vitorias</div>
+        </div>
+        <div class="stats-row" id="stats-row">
+            <div class="s-card">
+                <div class="s-icon s-icon-default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg></div>
+                <div class="s-data"><div class="s-value" id="st-total">0</div><div class="s-label">Apostas</div></div>
             </div>
-            <div class="stat-card stat-red">
-                <div class="stat-value" id="stat-losses">0</div>
-                <div class="stat-label">Derrotas</div>
+            <div class="s-card">
+                <div class="s-icon s-icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg></div>
+                <div class="s-data"><div class="s-value s-value-green" id="st-wins">0</div><div class="s-label">Vitorias</div></div>
             </div>
-            <div class="stat-card stat-gold">
-                <div class="stat-value" id="stat-profit">R$ 0,00</div>
-                <div class="stat-label">Lucro Hoje</div>
+            <div class="s-card">
+                <div class="s-icon s-icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></div>
+                <div class="s-data"><div class="s-value s-value-red" id="st-losses">0</div><div class="s-label">Derrotas</div></div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="stat-winrate">0%</div>
-                <div class="stat-label">Win Rate</div>
+            <div class="s-card">
+                <div class="s-icon s-icon-gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                <div class="s-data"><div class="s-value s-value-gold" id="st-profit">R$ 0,00</div><div class="s-label">Lucro</div></div>
+            </div>
+            <div class="s-card">
+                <div class="s-icon s-icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                <div class="s-data"><div class="s-value" id="st-winrate">0%</div><div class="s-label">Win Rate</div></div>
             </div>
         </div>
 
         <!-- Bet History -->
-        <div class="card">
-            <div class="card-header">
-                <h2>Historico de Apostas</h2>
+        <div class="hist-card">
+            <div class="section-head">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    Historico de Apostas
+                </h2>
             </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Hora</th>
-                            <th>Cor</th>
-                            <th>Valor</th>
-                            <th>Resultado</th>
-                            <th>Lucro</th>
-                            <th>Martingale</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-table">
-                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma aposta registrada</td></tr>
-                    </tbody>
-                </table>
+            <table class="hist-table">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Cor</th>
+                        <th>Valor</th>
+                        <th>Resultado</th>
+                        <th>Lucro</th>
+                        <th>Martingale</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <tr><td colspan="6"><div class="empty-hist">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        <p>Nenhuma aposta registrada</p>
+                    </div></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Extension Install -->
+        <div class="ext-card" id="ext-card" style="display:none;">
+            <div class="section-head" style="margin-bottom:0;">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2H7a5 5 0 0 0-5 5v10a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5V7a5 5 0 0 0-5-5Z"/><path d="M12 8v8m-4-4h8"/></svg>
+                    Extensao Chrome
+                </h2>
+                <span style="font-size:12px; color:var(--text-muted);">v1.0.0</span>
+            </div>
+            <div class="ext-steps">
+                <div class="ext-step">
+                    <div class="ext-step-num">1</div>
+                    <p>Baixe a pasta <strong>extension/</strong> do projeto</p>
+                </div>
+                <div class="ext-step">
+                    <div class="ext-step-num">2</div>
+                    <p>Abra <strong>chrome://extensions</strong></p>
+                </div>
+                <div class="ext-step">
+                    <div class="ext-step-num">3</div>
+                    <p>Ative <strong>Modo Desenvolvedor</strong> e carregue a pasta</p>
+                </div>
+            </div>
+            <div class="token-row">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <code id="api-token">---</code>
+                <button onclick="copyToken()">Copiar Token</button>
             </div>
         </div>
     </div>
@@ -119,89 +233,145 @@
 
     if (!token) window.location.href = '/login.html';
 
-    document.getElementById('user-name').textContent = user.name || '';
+    // Show admin link if admin
+    if (user.role === 'admin') document.getElementById('admin-link').style.display = '';
+
+    // Greeting based on time of day
+    const hour = new Date().getHours();
+    let greetWord = 'Boa noite';
+    if (hour >= 5 && hour < 12) greetWord = 'Bom dia';
+    else if (hour >= 12 && hour < 18) greetWord = 'Boa tarde';
+    document.getElementById('greeting-text').textContent = greetWord + ', ' + (user.name || 'Usuario') + '!';
+
     document.getElementById('logout-btn').addEventListener('click', () => {
         localStorage.removeItem('botblaze_token');
         localStorage.removeItem('botblaze_user');
         window.location.href = '/login.html';
     });
 
-    function copyToken() {
-        const tokenEl = document.getElementById('api-token');
-        navigator.clipboard.writeText(tokenEl.textContent).then(() => {
-            alert('Token copiado!');
-        });
-    }
+    // ── DATA ────────────────────────────────────────────────────────────────────
+    let histData = null, statsView = 'today';
 
     const colorNames = { 0: 'Branco', 1: 'Vermelho', 2: 'Preto' };
-    const colorClasses = { 0: 'white', 1: 'red', 2: 'black' };
 
+    function copyToken() {
+        const t = document.getElementById('api-token').textContent;
+        if (t && t !== '---') {
+            navigator.clipboard.writeText(t).then(() => showToast('Token copiado!'));
+        }
+    }
+
+    function showToast(msg) {
+        const el = document.createElement('div');
+        el.className = 'toast toast-success';
+        el.innerHTML = '&#10003; ' + msg;
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 2000);
+    }
+
+    // ── STATS SWITCH ────────────────────────────────────────────────────────────
+    function switchStats(view) {
+        statsView = view;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === (view === 'today' ? 'Hoje' : 'Total')));
+        renderStats();
+    }
+
+    function renderStats() {
+        if (!histData) return;
+        const s = statsView === 'today' ? histData.today : histData.stats;
+        if (!s) return;
+
+        const total = s.total_bets || 0;
+        const wins = s.wins || 0;
+        const losses = s.losses || 0;
+        const profit = parseFloat(s.profit) || 0;
+        const decided = wins + losses;
+        const winrate = decided > 0 ? ((wins / decided) * 100).toFixed(1) : '0';
+
+        document.getElementById('st-total').textContent = total;
+        document.getElementById('st-wins').textContent = wins;
+        document.getElementById('st-losses').textContent = losses;
+        document.getElementById('st-profit').textContent = (profit >= 0 ? '+' : '') + 'R$ ' + profit.toFixed(2).replace('.', ',');
+        document.getElementById('st-winrate').textContent = winrate + '%';
+    }
+
+    // ── RENDER HISTORY ──────────────────────────────────────────────────────────
+    function renderHistory() {
+        if (!histData || !histData.bets || !histData.bets.length) return;
+        const tbody = document.getElementById('history-body');
+        tbody.innerHTML = histData.bets.slice(0, 50).map(b => {
+            const color = parseInt(b.color_bet);
+            const time = new Date(b.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const profit = parseFloat(b.profit) || 0;
+            const resultClass = b.result === 'win' ? 'result-win' : (b.result === 'loss' ? 'result-loss' : 'result-pending');
+            const resultText = b.result === 'win' ? 'WIN' : (b.result === 'loss' ? 'LOSS' : '...');
+            const profitClass = profit >= 0 ? 'profit-pos' : 'profit-neg';
+            const mgHtml = b.was_martingale ? '<span class="mg-badge">Nv ' + b.martingale_level + '</span>' : '<span style="color:var(--text-muted)">-</span>';
+            return `<tr>
+                <td>${time}</td>
+                <td><span class="color-badge color-badge-${color}">${colorNames[color] || '?'}</span></td>
+                <td>R$ ${parseFloat(b.amount).toFixed(2).replace('.',',')}</td>
+                <td><span class="result-badge ${resultClass}">${resultText}</span></td>
+                <td class="${profitClass}">${profit >= 0 ? '+' : ''}R$ ${profit.toFixed(2).replace('.',',')}</td>
+                <td>${mgHtml}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ── RENDER SUBSCRIPTION ─────────────────────────────────────────────────────
+    function renderSubscription(subData) {
+        const card = document.getElementById('sub-card');
+        if (subData.subscription) {
+            const s = subData.subscription;
+            const days = s.days_remaining;
+            card.innerHTML = `<div class="sub-card sub-card-active">
+                <div class="sub-icon sub-icon-active">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                </div>
+                <div class="sub-info">
+                    <h3>Plano ${s.plan_name}</h3>
+                    <p>Expira em ${new Date(s.expires_at).toLocaleDateString('pt-BR')} (${days} dia${days !== 1 ? 's' : ''})</p>
+                </div>
+                <span class="sub-badge sub-badge-active">Ativo</span>
+            </div>`;
+            document.getElementById('ext-card').style.display = '';
+        } else {
+            card.innerHTML = `<div class="sub-card sub-card-none">
+                <div class="sub-icon sub-icon-none">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                </div>
+                <div class="sub-info">
+                    <h3>Sem assinatura ativa</h3>
+                    <p>Escolha um plano para ativar a extensao e comecar a apostar</p>
+                </div>
+                <a href="index.html#plans" class="btn btn-primary btn-sm">Ver Planos</a>
+            </div>`;
+            document.getElementById('ext-card').style.display = 'none';
+        }
+
+        if (subData.api_token) {
+            document.getElementById('api-token').textContent = subData.api_token;
+        }
+    }
+
+    // ── LOAD ────────────────────────────────────────────────────────────────────
     async function loadDashboard() {
         try {
-            // Check subscription
-            const subRes = await fetch(API_URL + '/subscription.php', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
+            const [subRes, histRes] = await Promise.all([
+                fetch(API_URL + '/subscription.php', { headers: { 'Authorization': 'Bearer ' + token } }),
+                fetch(API_URL + '/history.php', { headers: { 'Authorization': 'Bearer ' + token } })
+            ]);
             const subData = await subRes.json();
+            const histResult = await histRes.json();
 
-            const subStatus = document.getElementById('sub-status');
-            const noSubAlert = document.getElementById('no-sub-alert');
-            const extCard = document.getElementById('extension-card');
+            renderSubscription(subData);
 
-            if (subData.subscription) {
-                subStatus.textContent = subData.subscription.plan_name + ' - ' + subData.days_remaining + ' dias';
-                subStatus.className = 'badge badge-green';
-                noSubAlert.style.display = 'none';
-                extCard.style.display = 'block';
-            } else {
-                subStatus.textContent = 'Sem assinatura';
-                subStatus.className = 'badge badge-red';
-                noSubAlert.style.display = 'block';
-                extCard.style.display = 'none';
+            if (!histResult.error) {
+                histData = histResult;
+                renderStats();
+                renderHistory();
             }
-
-            if (subData.api_token) {
-                document.getElementById('api-token').textContent = subData.api_token;
-            }
-
-            // Load history
-            const histRes = await fetch(API_URL + '/history.php', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            const histData = await histRes.json();
-
-            if (histData.stats) {
-                const s = histData.stats;
-                document.getElementById('stat-total-bets').textContent = s.total || 0;
-                document.getElementById('stat-wins').textContent = s.wins || 0;
-                document.getElementById('stat-losses').textContent = s.losses || 0;
-                document.getElementById('stat-profit').textContent = 'R$ ' + (parseFloat(s.profit) || 0).toFixed(2).replace('.', ',');
-                const decided = (s.wins || 0) + (s.losses || 0);
-                document.getElementById('stat-winrate').textContent = decided > 0 ? ((s.wins / decided) * 100).toFixed(1) + '%' : '0%';
-            }
-
-            if (histData.bets && histData.bets.length > 0) {
-                const tbody = document.getElementById('history-table');
-                tbody.innerHTML = histData.bets.map(b => {
-                    const color = parseInt(b.color_bet);
-                    const time = new Date(b.created_at).toLocaleTimeString('pt-BR');
-                    const resultClass = b.result === 'win' ? 'badge-green' : (b.result === 'loss' ? 'badge-red' : 'badge-gold');
-                    const resultText = b.result === 'win' ? 'WIN' : (b.result === 'loss' ? 'LOSS' : '...');
-                    const profit = parseFloat(b.profit) || 0;
-                    const profitColor = profit >= 0 ? 'var(--green)' : 'var(--red)';
-                    return `<tr>
-                        <td>${time}</td>
-                        <td><span class="color-dot ${colorClasses[color]}"></span> ${colorNames[color] || '?'}</td>
-                        <td>R$ ${parseFloat(b.amount).toFixed(2)}</td>
-                        <td><span class="badge ${resultClass}">${resultText}</span></td>
-                        <td style="color: ${profitColor}; font-weight: 600;">${profit >= 0 ? '+' : ''}R$ ${profit.toFixed(2)}</td>
-                        <td>${b.was_martingale == 1 ? 'Nv ' + b.martingale_level : '-'}</td>
-                    </tr>`;
-                }).join('');
-            }
-        } catch (err) {
-            console.error('Erro:', err);
-        }
+        } catch (err) { console.error('Erro:', err); }
     }
 
     loadDashboard();

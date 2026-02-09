@@ -5,11 +5,7 @@ require_once __DIR__ . '/config.php';
 $user = validateToken();
 $db = getDB();
 
-// Require active subscription for settings access
 $subscription = hasActiveSubscription($user['id']);
-if (!$subscription) {
-    jsonResponse(['error' => 'Assinatura ativa necessaria para acessar configuracoes'], 403);
-}
 
 // ── GET: Return current settings ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
