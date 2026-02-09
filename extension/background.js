@@ -329,6 +329,7 @@ async function handleSaveSessionStats(stats) {
             todayBets: stats.todayBets || 0,
             martingaleLevel: stats.martingaleLevel || 0,
             currentBetColor: stats.currentBetColor !== undefined ? stats.currentBetColor : null,
+            lastBetColor: stats.lastBetColor !== undefined ? stats.lastBetColor : null,
             currentBetAmount: stats.currentBetAmount || 0,
             waitingResult: stats.waitingResult || false,
             savedAt: Date.now()

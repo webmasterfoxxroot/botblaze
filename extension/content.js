@@ -82,6 +82,7 @@
 
         // Martingale
         martingaleLevel: 0,
+        lastBetColor: null, // Cor da ultima aposta (nao reseta, usado pelo martingale)
 
         // Controle de deteccao de novos resultados
         lastHistorySignature: '',
@@ -177,6 +178,7 @@
             state.sessionLosses = s.sessionLosses || 0;
             state.todayBets = s.todayBets || 0;
             state.martingaleLevel = s.martingaleLevel || 0;
+            state.lastBetColor = s.lastBetColor !== undefined ? s.lastBetColor : null;
             if (s.waitingResult && s.currentBetColor !== null) {
                 state.currentBetColor = s.currentBetColor;
                 state.currentBetAmount = s.currentBetAmount || 0;
@@ -693,9 +695,9 @@
         // Martingale override: se perdeu e martingale esta ativo, repete mesma cor
         const mgEnabled = state.settings &&
             (state.settings.martingale_enabled === true || state.settings.martingale_enabled == 1);
-        if (mgEnabled && state.martingaleLevel > 0 && state.currentBetColor !== null) {
-            console.log('[BotBlaze] Martingale nv ' + state.martingaleLevel + ': repetindo ' + COLOR_NAMES[state.currentBetColor]);
-            return state.currentBetColor;
+        if (mgEnabled && state.martingaleLevel > 0 && state.lastBetColor !== null) {
+            console.log('[BotBlaze] Martingale nv ' + state.martingaleLevel + ': repetindo ' + COLOR_NAMES[state.lastBetColor]);
+            return state.lastBetColor;
         }
 
         analysis.totalRoundsAnalyzed++;
@@ -1164,6 +1166,7 @@
 
         // Atualiza estado
         state.currentBetColor = color;
+        state.lastBetColor = color; // Guarda para martingale (nao reseta apos resultado)
         state.currentBetAmount = amount;
         state.waitingResult = true;
         state.lastBetTime = Date.now();
@@ -1434,6 +1437,14 @@
 
             // Persiste estatisticas para sobreviver a recarregamentos
             saveSessionStats();
+
+            // Se a fase atual ja e 'betting', agenda o martingale/proxima aposta
+            // (corrige race condition: onBettingPhase foi chamado antes do resultado ser processado)
+            if (state.botActive && state.gamePhase === 'betting') {
+                setTimeout(() => {
+                    onBettingPhase();
+                }, 800);
+            }
         }
 
         updateOverlay();
@@ -2076,6 +2087,7 @@
                 todayBets: state.todayBets,
                 martingaleLevel: state.martingaleLevel,
                 currentBetColor: state.currentBetColor,
+                lastBetColor: state.lastBetColor,
                 currentBetAmount: state.currentBetAmount,
                 waitingResult: state.waitingResult
             }
