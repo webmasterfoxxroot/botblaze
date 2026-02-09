@@ -148,19 +148,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.disabled = true;
         btn.textContent = 'Salvando...';
 
-        // Salva direto no chrome.storage.local (no computador do cliente)
-        await chrome.storage.local.set({ bot_settings: settings });
+        // Salva no servidor (banco de dados via API)
+        const saveResult = await sendMessage({ action: 'saveSettings', payload: settings });
 
-        msgEl.textContent = 'Salvo!';
-        msgEl.className = 'save-msg save-success';
+        if (saveResult && saveResult.success) {
+            msgEl.textContent = 'Salvo!';
+            msgEl.className = 'save-msg save-success';
+        } else {
+            msgEl.textContent = saveResult.warning || 'Salvo localmente';
+            msgEl.className = 'save-msg save-success';
+        }
         msgEl.style.display = 'inline';
         setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
 
         // Notifica o content script para atualizar as settings em tempo real
         notifyContentScript({ action: 'updateSettings', settings: settings });
-
-        // Tenta sincronizar com o servidor (nao bloqueia)
-        sendMessage({ action: 'saveSettings', payload: settings }).catch(() => {});
 
         btn.disabled = false;
         btn.textContent = 'Salvar Configuracoes';
@@ -171,8 +173,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('toggle-bot').addEventListener('change', async (e) => {
         const isActive = e.target.checked;
 
-        // Salva no storage
-        await chrome.storage.local.set({ bot_active: isActive });
+        // Salva auto_bet no servidor via API
+        sendMessage({ action: 'saveSettings', payload: { auto_bet: isActive ? 1 : 0 } });
 
         // Notifica o content script
         notifyContentScript({ action: 'toggleBot', active: isActive });
@@ -297,9 +299,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             subEl.className = 'badge badge-red';
         }
 
-        // Carrega configuracoes direto do chrome.storage.local (salvas no computador)
-        const store = await chrome.storage.local.get(['bot_settings']);
-        const s = store.bot_settings || data.settings || {};
+        // Carrega configuracoes do servidor (banco de dados via API)
+        const settingsResult = await sendMessage({ action: 'getSettings' });
+        const s = (settingsResult && settingsResult.settings) ? settingsResult.settings : (data.settings || {});
 
         document.getElementById('cfg-bet-amount').value = formatBRL(s.bet_amount || 2);
         document.getElementById('cfg-strategy').value = s.strategy || 'moderado';
