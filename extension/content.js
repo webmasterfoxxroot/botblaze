@@ -2030,7 +2030,19 @@
         const toggle = document.getElementById('bb-toggle');
         if (toggle) {
             toggle.addEventListener('change', () => {
-                state.botActive = toggle.checked;
+                if (toggle.checked) {
+                    // Verifica limites antes de ligar
+                    if (!checkLimits()) {
+                        toggle.checked = false;
+                        console.log('[BotBlaze] Nao pode ligar: ' + state._stopReason);
+                        updateOverlay();
+                        return;
+                    }
+                    state.botActive = true;
+                    state._stopReason = null;
+                } else {
+                    state.botActive = false;
+                }
                 console.log('[BotBlaze] Bot ' + (state.botActive ? 'LIGADO' : 'DESLIGADO') + ' pelo overlay');
                 updateOverlay();
                 if (state.botActive && state.gamePhase === 'betting') {
@@ -2156,7 +2168,12 @@
 
         // --- Sinal principal (signal box) ---
         if (ids.signal) {
-            if (analysis.lastDecision !== null) {
+            // Prioridade: motivo de parada > cooldown > sinal normal
+            if (!state.botActive && state._stopReason) {
+                ids.signal.innerHTML = '<span style="color:#ef4444">' + state._stopReason + '</span>';
+            } else if (state._mgCooldown > 0) {
+                ids.signal.innerHTML = '<span style="color:#f39c12">Pausa MG: ' + state._mgCooldown + ' rodadas</span>';
+            } else if (analysis.lastDecision !== null) {
                 const sc = analysis.lastDecision === COLOR_RED ? '#ef4444' :
                     analysis.lastDecision === COLOR_BLACK ? '#4a4a5a' : '#f1c40f';
                 ids.signal.innerHTML = '<span style="color:' + sc + '">' + COLOR_NAMES[analysis.lastDecision] + '</span>';
@@ -2173,7 +2190,11 @@
         const confLabel = conf >= 70 ? 'Alta' : conf >= 50 ? 'Media' : conf > 0 ? 'Baixa' : 'Sem dados';
 
         if (ids.confText) {
-            if (conf > 0) {
+            if (!state.botActive && state._stopReason) {
+                ids.confText.innerHTML = '<span style="color:#ef4444;font-size:10px">Aumente o limite nas configuracoes</span>';
+            } else if (state._mgCooldown > 0) {
+                ids.confText.innerHTML = '<span style="color:#f39c12">Martingale estourou, aguardando...</span>';
+            } else if (conf > 0) {
                 ids.confText.innerHTML = '<span style="color:' + confColor + '">' + confLabel + ' ' + conf + '%</span>';
             } else {
                 ids.confText.innerHTML = '<span style="color:#555">' + confLabel + '</span>';
