@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
     bet_amount DECIMAL(10,2) DEFAULT 2.00,
-    strategy ENUM('color_frequency', 'martingale', 'pattern', 'manual') DEFAULT 'color_frequency',
+    strategy VARCHAR(30) DEFAULT 'moderado',
+    min_confidence INT DEFAULT 60,
+    bet_white TINYINT(1) DEFAULT 1,
     martingale_enabled TINYINT(1) DEFAULT 0,
     martingale_max INT DEFAULT 3,
     martingale_multiplier DECIMAL(3,1) DEFAULT 2.0,
@@ -98,3 +100,11 @@ FROM dual WHERE NOT EXISTS (SELECT 1 FROM subscriptions WHERE user_id = 1);
 -- Settings padrao do admin
 INSERT INTO user_settings (user_id) VALUES (1)
 ON DUPLICATE KEY UPDATE user_id = user_id;
+
+-- ── MIGRATION: Atualiza tabela existente para novo sistema de estrategias ────
+-- Execute estas queries se a tabela ja existir:
+-- ALTER TABLE user_settings MODIFY strategy VARCHAR(30) DEFAULT 'moderado';
+-- ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS min_confidence INT DEFAULT 60 AFTER strategy;
+-- ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS bet_white TINYINT(1) DEFAULT 1 AFTER min_confidence;
+-- UPDATE user_settings SET strategy = 'moderado' WHERE strategy IN ('color_frequency', 'pattern', 'manual');
+-- UPDATE user_settings SET strategy = 'moderado' WHERE strategy = 'martingale';

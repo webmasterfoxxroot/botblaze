@@ -98,8 +98,8 @@
 
                 <div class="field">
                     <label class="field-label">Valor da Aposta (R$)</label>
-                    <input type="number" id="bet_amount" class="field-input" min="0.10" max="1000" step="0.10" value="2.00">
-                    <p class="field-hint">Valor base de cada aposta</p>
+                    <input type="text" id="bet_amount" class="field-input" inputmode="decimal" placeholder="2,00" value="2,00">
+                    <p class="field-hint">Valor base de cada aposta (ex: 3,50)</p>
                 </div>
 
                 <div class="field">
@@ -297,7 +297,7 @@
             const data = await res.json();
             if (data.settings) {
                 const s = data.settings;
-                document.getElementById('bet_amount').value = s.bet_amount || 2;
+                document.getElementById('bet_amount').value = formatBRL(s.bet_amount || 2);
                 document.getElementById('strategy').value = s.strategy || 'moderado';
                 document.getElementById('min_confidence').value = s.min_confidence || 60;
                 document.getElementById('bet_white').checked = s.bet_white !== false && s.bet_white !== 0;
@@ -323,7 +323,7 @@
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Salvando...';
 
         const settings = {
-            bet_amount: parseFloat(document.getElementById('bet_amount').value),
+            bet_amount: parseBRL(document.getElementById('bet_amount').value),
             strategy: document.getElementById('strategy').value,
             min_confidence: parseInt(document.getElementById('min_confidence').value),
             bet_white: document.getElementById('bet_white').checked ? 1 : 0,
@@ -376,6 +376,22 @@
     }
 
     document.getElementById('strategy').addEventListener('change', updateStrategyHint);
+
+    // ── FORMATADORES BR ──────────────────────────────────────────────────────────
+
+    function parseBRL(val) {
+        if (typeof val === 'number') return val;
+        val = String(val).trim().replace(/R\$/g, '').replace(/\s/g, '');
+        if (val.includes(',')) val = val.replace(/\./g, '').replace(',', '.');
+        const num = parseFloat(val);
+        return isNaN(num) ? 2 : num;
+    }
+
+    function formatBRL(val) {
+        val = parseFloat(val);
+        if (isNaN(val)) return '2,00';
+        return val.toFixed(2).replace('.', ',');
+    }
 
     loadSettings();
     </script>

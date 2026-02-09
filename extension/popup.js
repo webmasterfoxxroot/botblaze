@@ -132,15 +132,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const msgEl = document.getElementById('save-msg');
 
         const settings = {
-            bet_amount:           parseFloat(document.getElementById('cfg-bet-amount').value) || 2,
+            bet_amount:           parseBRL(document.getElementById('cfg-bet-amount').value),
             strategy:             document.getElementById('cfg-strategy').value,
             min_confidence:       parseInt(document.getElementById('cfg-min-confidence').value) || 60,
             bet_white:            document.getElementById('cfg-bet-white').checked ? 1 : 0,
             martingale_enabled:   document.getElementById('cfg-martingale').checked ? 1 : 0,
             martingale_max:       parseInt(document.getElementById('cfg-mg-max').value) || 3,
             martingale_multiplier: parseFloat(document.getElementById('cfg-mg-mult').value) || 2.0,
-            stop_loss:            parseFloat(document.getElementById('cfg-stop-loss').value) || 50,
-            stop_gain:            parseFloat(document.getElementById('cfg-stop-gain').value) || 50,
+            stop_loss:            parseBRL(document.getElementById('cfg-stop-loss').value),
+            stop_gain:            parseBRL(document.getElementById('cfg-stop-gain').value),
             max_bets_per_day:     parseInt(document.getElementById('cfg-max-bets').value) || 100,
             auto_bet:             document.getElementById('toggle-bot').checked ? 1 : 0
         };
@@ -148,22 +148,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.disabled = true;
         btn.textContent = 'Salvando...';
 
-        const result = await sendMessage({ action: 'saveSettings', payload: settings });
+        // Salva direto no chrome.storage.local (no computador do cliente)
+        await chrome.storage.local.set({ bot_settings: settings });
 
-        if (result.success) {
-            msgEl.textContent = result.warning ? 'Salvo localmente!' : 'Salvo!';
-            msgEl.className = 'save-msg save-success';
-            msgEl.style.display = 'inline';
-            setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
+        msgEl.textContent = 'Salvo!';
+        msgEl.className = 'save-msg save-success';
+        msgEl.style.display = 'inline';
+        setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
 
-            // Notifica o content script para atualizar as settings em tempo real
-            notifyContentScript({ action: 'updateSettings', settings: settings });
-        } else {
-            msgEl.textContent = 'Erro ao salvar';
-            msgEl.className = 'save-msg save-error';
-            msgEl.style.display = 'inline';
-            setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
-        }
+        // Notifica o content script para atualizar as settings em tempo real
+        notifyContentScript({ action: 'updateSettings', settings: settings });
+
+        // Tenta sincronizar com o servidor (nao bloqueia)
+        sendMessage({ action: 'saveSettings', payload: settings }).catch(() => {});
 
         btn.disabled = false;
         btn.textContent = 'Salvar Configuracoes';
@@ -228,6 +225,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ===================== HELPERS =====================
 
     /**
+     * Converte valor BR (3,20) para float (3.20).
+     */
+    function parseBRL(val) {
+        if (typeof val === 'number') return val;
+        val = String(val).trim().replace(/\s/g, '');
+        // Remove R$ se presente
+        val = val.replace(/R\$/g, '');
+        // Formato BR: 1.234,56 -> 1234.56
+        if (val.includes(',')) {
+            val = val.replace(/\./g, '').replace(',', '.');
+        }
+        const num = parseFloat(val);
+        return isNaN(num) ? 2 : num;
+    }
+
+    /**
+     * Formata float (3.20) para exibicao BR (3,20).
+     */
+    function formatBRL(val) {
+        val = parseFloat(val);
+        if (isNaN(val)) return '2,00';
+        return val.toFixed(2).replace('.', ',');
+    }
+
+    /**
      * Mostra a tela de login.
      */
     function showLoginView() {
@@ -275,18 +297,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             subEl.className = 'badge badge-red';
         }
 
-        // Carrega configuracoes no formulario
-        const s = data.settings || {};
-        document.getElementById('cfg-bet-amount').value = s.bet_amount || 2;
+        // Carrega configuracoes direto do chrome.storage.local (salvas no computador)
+        const store = await chrome.storage.local.get(['bot_settings']);
+        const s = store.bot_settings || data.settings || {};
+
+        document.getElementById('cfg-bet-amount').value = formatBRL(s.bet_amount || 2);
         document.getElementById('cfg-strategy').value = s.strategy || 'moderado';
         document.getElementById('cfg-min-confidence').value = s.min_confidence || 60;
         document.getElementById('cfg-bet-white').checked = s.bet_white !== 0 && s.bet_white !== false;
         document.getElementById('cfg-martingale').checked = (s.martingale_enabled == 1 || s.martingale_enabled === true);
         document.getElementById('cfg-mg-max').value = s.martingale_max || 3;
         document.getElementById('cfg-mg-mult').value = s.martingale_multiplier || 2.0;
-        document.getElementById('cfg-stop-loss').value = s.stop_loss || 50;
-        document.getElementById('cfg-stop-gain').value = s.stop_gain || 50;
-        document.getElementById('cfg-max-bets').value = s.max_bets_per_day || 100;
+        document.getElementById('cfg-stop-loss').value = formatBRL(s.stop_loss || 50);
+        document.getElementById('cfg-stop-gain').value = formatBRL(s.stop_gain || 100);
+        document.getElementById('cfg-max-bets').value = s.max_bets_per_day || 50;
         document.getElementById('toggle-bot').checked = (s.auto_bet == 1 || s.auto_bet === true);
 
         // Mostra/esconde opcoes de martingale

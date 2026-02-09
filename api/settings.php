@@ -24,19 +24,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     jsonResponse([
         'success'  => true,
-        'settings' => [
-            'bet_amount'            => (float) $settings['bet_amount'],
-            'strategy'              => $settings['strategy'],
-            'martingale_enabled'    => (bool) $settings['martingale_enabled'],
-            'martingale_max'        => (int) $settings['martingale_max'],
-            'martingale_multiplier' => (float) $settings['martingale_multiplier'],
-            'stop_loss'             => (float) $settings['stop_loss'],
-            'stop_gain'             => (float) $settings['stop_gain'],
-            'max_bets_per_day'      => (int) $settings['max_bets_per_day'],
-            'auto_bet'              => (bool) $settings['auto_bet'],
-            'updated_at'            => $settings['updated_at'],
-        ],
+        'settings' => formatSettings($settings),
     ]);
+}
+
+// Helper: formata settings para resposta JSON
+function formatSettings($settings) {
+    return [
+        'bet_amount'            => (float) ($settings['bet_amount'] ?? 2.00),
+        'strategy'              => $settings['strategy'] ?? 'moderado',
+        'min_confidence'        => (int) ($settings['min_confidence'] ?? 60),
+        'bet_white'             => (int) ($settings['bet_white'] ?? 1),
+        'martingale_enabled'    => (int) ($settings['martingale_enabled'] ?? 0),
+        'martingale_max'        => (int) ($settings['martingale_max'] ?? 3),
+        'martingale_multiplier' => (float) ($settings['martingale_multiplier'] ?? 2.0),
+        'stop_loss'             => (float) ($settings['stop_loss'] ?? 50.00),
+        'stop_gain'             => (float) ($settings['stop_gain'] ?? 100.00),
+        'max_bets_per_day'      => (int) ($settings['max_bets_per_day'] ?? 50),
+        'auto_bet'              => (int) ($settings['auto_bet'] ?? 1),
+        'updated_at'            => $settings['updated_at'] ?? null,
+    ];
 }
 
 // ── POST: Update settings ────────────────────────────────────────────────────
@@ -48,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Allowed fields and their validation rules
-    $validStrategies = ['color_frequency', 'martingale', 'pattern', 'manual'];
+    $validStrategies = ['conservador', 'moderado', 'agressivo', 'color_frequency', 'martingale', 'pattern', 'manual'];
     $errors = [];
 
     // Fetch current settings as base
@@ -142,6 +149,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if (isset($input['min_confidence'])) {
+        $val = (int) $input['min_confidence'];
+        if ($val < 30 || $val > 90) {
+            $errors[] = 'min_confidence deve ser entre 30 e 90';
+        } else {
+            $updates[] = 'min_confidence = ?';
+            $params[] = $val;
+        }
+    }
+
+    if (isset($input['bet_white'])) {
+        $updates[] = 'bet_white = ?';
+        $params[] = $input['bet_white'] ? 1 : 0;
+    }
+
     if (isset($input['auto_bet'])) {
         $updates[] = 'auto_bet = ?';
         $params[] = $input['auto_bet'] ? 1 : 0;
@@ -171,18 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     jsonResponse([
         'success'  => true,
         'message'  => 'Configuracoes atualizadas com sucesso',
-        'settings' => [
-            'bet_amount'            => (float) $settings['bet_amount'],
-            'strategy'              => $settings['strategy'],
-            'martingale_enabled'    => (bool) $settings['martingale_enabled'],
-            'martingale_max'        => (int) $settings['martingale_max'],
-            'martingale_multiplier' => (float) $settings['martingale_multiplier'],
-            'stop_loss'             => (float) $settings['stop_loss'],
-            'stop_gain'             => (float) $settings['stop_gain'],
-            'max_bets_per_day'      => (int) $settings['max_bets_per_day'],
-            'auto_bet'              => (bool) $settings['auto_bet'],
-            'updated_at'            => $settings['updated_at'],
-        ],
+        'settings' => formatSettings($settings),
     ]);
 }
 
