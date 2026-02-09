@@ -83,6 +83,10 @@
         // Martingale
         martingaleLevel: 0,
         lastBetColor: null, // Cor da ultima aposta (nao reseta, usado pelo martingale)
+        lastBetResult: null, // 'win' ou 'loss' - resultado da ultima aposta
+
+        // Controle de agendamento de aposta (impede duplicatas)
+        _betPending: false,
 
         // Controle de deteccao de novos resultados
         lastHistorySignature: '',
@@ -179,6 +183,7 @@
             state.todayBets = s.todayBets || 0;
             state.martingaleLevel = s.martingaleLevel || 0;
             state.lastBetColor = s.lastBetColor !== undefined ? s.lastBetColor : null;
+            state.lastBetResult = s.lastBetResult || null;
             if (s.waitingResult && s.currentBetColor !== null) {
                 state.currentBetColor = s.currentBetColor;
                 state.currentBetAmount = s.currentBetAmount || 0;
@@ -1281,6 +1286,11 @@
             const dc = btn.getAttribute('data-color') || btn.getAttribute('data-value') || '';
             const style = (btn.getAttribute('style') || '').toLowerCase();
 
+            // Ignora botoes que nao sao de aposta (depositar, sacar, menu, etc)
+            if (text.includes('depositar') || text.includes('sacar') || text.includes('deposit') ||
+                text.includes('withdraw') || text.includes('entrar') || text.includes('login') ||
+                text.includes('cadastr') || text.includes('menu') || text.includes('saldo')) return;
+
             let score = 0;
 
             // 1. Data attributes (mais confiavel)
@@ -1498,9 +1508,11 @@
             if (won) {
                 state.sessionWins++;
                 state.martingaleLevel = 0;
+                state.lastBetResult = 'win';
                 console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
             } else {
                 state.sessionLosses++;
+                state.lastBetResult = 'loss';
 
                 const mgEnabled = (
                     state.settings &&
@@ -1567,6 +1579,7 @@
         if (!state.hasSubscription) return;
         if (!state.settings) return;
         if (state.waitingResult) return;
+        if (state._betPending) return; // Ja tem aposta agendada
         if (Date.now() - state.lastBetTime < MIN_BET_INTERVAL) return;
 
         if (!checkLimits()) {
@@ -1593,11 +1606,16 @@
             return;
         }
 
+        // Marca que tem aposta agendada (impede duplicatas)
+        state._betPending = true;
+
         // Delay aleatorio curto para apostar rapido durante o countdown (0.5-1.5s)
         const delay = 500 + Math.random() * 1000;
-        console.log('[BotBlaze] Apostando em ' + (delay / 1000).toFixed(1) + 's: ' + COLOR_NAMES[color] + ' R$' + amount.toFixed(2));
+        console.log('[BotBlaze] Apostando em ' + (delay / 1000).toFixed(1) + 's: ' + COLOR_NAMES[color] + ' R$' + amount.toFixed(2) +
+            (state.martingaleLevel > 0 ? ' [MG nv' + state.martingaleLevel + ']' : ''));
 
         setTimeout(() => {
+            state._betPending = false;
             if (state.botActive && detectGamePhase() === 'betting') {
                 placeBet(color, amount);
             } else {
@@ -2087,9 +2105,8 @@
                 const betColor = state.currentBetColor === COLOR_RED ? '#ef4444' :
                     state.currentBetColor === COLOR_BLACK ? '#9ca3af' : '#f1c40f';
                 ids.lastBet.innerHTML = '<span style="color:' + betColor + '">' + COLOR_NAMES[state.currentBetColor] + '</span> R$' + state.currentBetAmount.toFixed(2) + ' <span style="color:#f1c40f;font-size:11px">aguardando</span>';
-            } else if (state.sessionBets > 0) {
-                const lastWon = state.sessionWins > 0 && (state.sessionProfit >= 0);
-                if (lastWon) {
+            } else if (state.lastBetResult) {
+                if (state.lastBetResult === 'win') {
                     ids.lastBet.innerHTML = '<span class="bb-green">Vitoria</span>';
                 } else {
                     ids.lastBet.innerHTML = '<span class="bb-red">Derrota</span>';
@@ -2211,6 +2228,7 @@
                 martingaleLevel: state.martingaleLevel,
                 currentBetColor: state.currentBetColor,
                 lastBetColor: state.lastBetColor,
+                lastBetResult: state.lastBetResult,
                 currentBetAmount: state.currentBetAmount,
                 waitingResult: state.waitingResult
             }
