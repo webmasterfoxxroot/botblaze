@@ -204,6 +204,7 @@
         readInitialHistory();
         startObserver();
         startPolling();
+        startKeepAlive();
 
         console.log('[BotBlaze] Bot inicializado. Auto-bet:', state.botActive);
     }
@@ -2008,6 +2009,47 @@
         });
 
         console.log('[BotBlaze] MutationObserver iniciado.');
+    }
+
+    /**
+     * Keep-alive: simula atividade do usuario a cada 2 minutos para
+     * evitar que a Blaze desconecte a sessao por inatividade.
+     * Dispara mousemove, scroll e foca a janela periodicamente.
+     */
+    function startKeepAlive() {
+        const KEEP_ALIVE_INTERVAL = 2 * 60 * 1000; // 2 minutos
+
+        function simulateActivity() {
+            try {
+                // Simula movimento do mouse em posicao aleatoria
+                const x = 100 + Math.random() * 400;
+                const y = 100 + Math.random() * 400;
+                document.dispatchEvent(new MouseEvent('mousemove', {
+                    clientX: x, clientY: y, bubbles: true
+                }));
+
+                // Simula um pequeno scroll (vai e volta para nao mudar a posicao)
+                window.scrollBy(0, 1);
+                setTimeout(() => window.scrollBy(0, -1), 100);
+
+                // Dispara evento de foco na janela
+                window.dispatchEvent(new Event('focus'));
+                document.dispatchEvent(new Event('visibilitychange'));
+
+                // Faz um fetch leve para manter cookies/sessao ativos no servidor
+                fetch('/pt/games/double', {
+                    method: 'HEAD',
+                    credentials: 'include'
+                }).catch(() => {}); // ignora erros silenciosamente
+
+                console.log('[BotBlaze] Keep-alive: atividade simulada');
+            } catch (e) {
+                // Silencioso - nao deve afetar funcionamento do bot
+            }
+        }
+
+        setInterval(simulateActivity, KEEP_ALIVE_INTERVAL);
+        console.log('[BotBlaze] Keep-alive iniciado (a cada 2 min)');
     }
 
     /**
