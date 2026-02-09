@@ -28,6 +28,16 @@
         [COLOR_BLACK]: 2
     };
 
+    // Blaze Double: converte numero do resultado em cor
+    // 0 = Branco (x14), 1-7 = Vermelho (x2), 8-14 = Preto (x2)
+    function numberToColor(num) {
+        num = parseInt(num);
+        if (isNaN(num) || num < 0 || num > 14) return null;
+        if (num === 0) return COLOR_WHITE;
+        if (num >= 1 && num <= 7) return COLOR_RED;
+        return COLOR_BLACK; // 8-14
+    }
+
     // Intervalo minimo entre apostas (ms)
     const MIN_BET_INTERVAL = 5000;
 
@@ -69,7 +79,10 @@
         lastHistorySignature: '',
 
         // Saldo lido da pagina
-        balance: 0
+        balance: 0,
+
+        // Contador de retries do historico
+        _historyRetryCount: 0
     };
 
     // ===================== INICIALIZACAO =====================
@@ -135,21 +148,24 @@
 
     /**
      * Le o historico de resultados da barra de historico da Blaze.
-     * Tenta multiplos seletores para ser robusto a mudancas de layout.
+     * Usa 3 estrategias: seletores CSS, leitura de numeros, e scan do GIROS ANTERIORES.
      */
     function readInitialHistory() {
         state.gameHistory = [];
 
-        // Seletores possiveis para os itens de historico (circulos coloridos)
-        // TODO: ajustar seletor se necessario
+        // === Estrategia 1: Seletores CSS tradicionais ===
         const selectorSets = [
             '[class*="entries"] [class*="entry"]',
             '.roulette-previous .entry',
             '.sm-box',
+            '#roulette-past .entry',
+            '#roulette-past > div',
             '[class*="double-history"] div',
             '[class*="roulette"] [class*="past"]',
             '[class*="history"] [class*="item"]',
             '[class*="recent"] [class*="circle"]',
+            '[class*="past"] [class*="box"]',
+            '[class*="previous"] [class*="entry"]',
             '[data-role="history-item"]'
         ];
 
@@ -157,10 +173,8 @@
         for (const selector of selectorSets) {
             try {
                 items = document.querySelectorAll(selector);
-                if (items.length > 0) break;
-            } catch (e) {
-                // Seletor invalido, pula
-            }
+                if (items.length >= 3) break;
+            } catch (e) {}
         }
 
         items.forEach((el) => {
@@ -170,21 +184,164 @@
             }
         });
 
-        state.lastHistorySignature = computeHistorySignature();
+        if (state.gameHistory.length >= 3) {
+            console.log('[BotBlaze] Historico via seletores CSS:', state.gameHistory.length);
+        }
 
+        // === Estrategia 2: Scan de circulos numerados (0-14) ===
+        if (state.gameHistory.length < 3) {
+            const numbered = scanNumberedElements();
+            if (numbered.length > state.gameHistory.length) {
+                state.gameHistory = numbered;
+                console.log('[BotBlaze] Historico via numeros:', state.gameHistory.length);
+            }
+        }
+
+        // === Estrategia 3: Scan da secao GIROS ANTERIORES ===
+        if (state.gameHistory.length < 3) {
+            const giros = scanGirosAnteriores();
+            if (giros.length > state.gameHistory.length) {
+                state.gameHistory = giros;
+                console.log('[BotBlaze] Historico via GIROS ANTERIORES:', state.gameHistory.length);
+            }
+        }
+
+        state.lastHistorySignature = computeHistorySignature();
         console.log('[BotBlaze] Historico inicial lido:', state.gameHistory.length, 'resultados');
         updateOverlay();
+
+        // Retry se insuficiente (max 5 tentativas, a cada 4s)
+        if (state.gameHistory.length < 3 && state._historyRetryCount < 5) {
+            state._historyRetryCount++;
+            console.log('[BotBlaze] Historico insuficiente. Retry #' + state._historyRetryCount + ' em 4s...');
+            setTimeout(readInitialHistory, 4000);
+        }
     }
 
     /**
-     * Determina a cor de um elemento do historico baseado em classes, styles e atributos.
+     * Busca elementos na pagina que contem numeros 0-14 (resultados da roleta).
+     * Agrupa por posicao vertical e retorna o maior grupo como historico.
+     */
+    function scanNumberedElements() {
+        const results = [];
+        const candidates = [];
+
+        // Busca todos os elementos com conteudo numerico 0-14
+        const allEls = document.querySelectorAll('div, span, a, p, td, li, button');
+
+        allEls.forEach((el) => {
+            // Pega apenas texto direto do elemento (nao dos filhos)
+            let directText = '';
+            for (const node of el.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    directText += node.textContent.trim();
+                }
+            }
+
+            // Tambem tenta textContent se for folha (sem filhos de elementos)
+            if (!directText && el.children.length === 0) {
+                directText = (el.textContent || '').trim();
+            }
+
+            if (/^\d{1,2}$/.test(directText)) {
+                const num = parseInt(directText);
+                if (num >= 0 && num <= 14) {
+                    const rect = el.getBoundingClientRect();
+                    // Deve ser visivel e ter tamanho de circulo (20-120px)
+                    if (rect.width >= 20 && rect.width <= 120 &&
+                        rect.height >= 20 && rect.height <= 120 &&
+                        rect.top > 0 && rect.top < window.innerHeight) {
+                        candidates.push({ el, num, x: rect.left, y: Math.round(rect.top / 40) * 40, rect });
+                    }
+                }
+            }
+        });
+
+        if (candidates.length < 3) return results;
+
+        // Agrupa por Y aproximado (mesma fileira)
+        const yGroups = {};
+        candidates.forEach((c) => {
+            if (!yGroups[c.y]) yGroups[c.y] = [];
+            yGroups[c.y].push(c);
+        });
+
+        // Pega o maior grupo (mais provavel ser a strip de historico)
+        let bestGroup = [];
+        for (const y in yGroups) {
+            if (yGroups[y].length > bestGroup.length) {
+                bestGroup = yGroups[y];
+            }
+        }
+
+        if (bestGroup.length < 2) return results;
+
+        // Ordena por X (esquerda = mais recente tipicamente)
+        bestGroup.sort((a, b) => a.x - b.x);
+
+        console.log('[BotBlaze] Circulos numerados encontrados:', bestGroup.length,
+            '| Numeros:', bestGroup.map(c => c.num).join(', '));
+
+        bestGroup.forEach((c) => {
+            const color = numberToColor(c.num);
+            if (color !== null) {
+                results.push({ color, number: c.num, timestamp: Date.now() });
+            }
+        });
+
+        return results;
+    }
+
+    /**
+     * Procura a secao "GIROS ANTERIORES" e le os circulos coloridos dentro dela.
+     */
+    function scanGirosAnteriores() {
+        const results = [];
+
+        // Busca o texto "GIROS ANTERIORES" na pagina
+        const allEls = document.querySelectorAll('h1, h2, h3, h4, h5, h6, div, span, p, section');
+        let container = null;
+
+        for (const el of allEls) {
+            const text = (el.textContent || '').trim();
+            if (text === 'GIROS ANTERIORES' || text === 'Giros Anteriores') {
+                // O container dos circulos e o proximo irmao ou o pai
+                container = el.nextElementSibling || el.parentElement;
+                break;
+            }
+        }
+
+        if (!container) return results;
+
+        // Le todos os filhos do container
+        const children = container.querySelectorAll('div, span, a');
+        let found = 0;
+
+        children.forEach((child) => {
+            if (found > 50) return; // Limita
+
+            const color = getColorFromElement(child);
+            if (color !== null) {
+                results.push({ color, timestamp: Date.now() });
+                found++;
+            }
+        });
+
+        if (results.length > 0) {
+            console.log('[BotBlaze] GIROS ANTERIORES: ' + results.length + ' resultados');
+        }
+
+        return results;
+    }
+
+    /**
+     * Determina a cor de um elemento do historico baseado em classes, styles, atributos e numeros.
      * Retorna COLOR_WHITE (0), COLOR_RED (1), COLOR_BLACK (2), ou null.
      */
     function getColorFromElement(el) {
         if (!el) return null;
 
         const classes = (el.className || '').toLowerCase();
-        const bg = (el.style && el.style.backgroundColor) ? el.style.backgroundColor.toLowerCase() : '';
         const text = (el.textContent || '').trim().toLowerCase();
         const dataColor = el.getAttribute('data-color') || el.getAttribute('data-value') || '';
 
@@ -192,106 +349,165 @@
         if (dataColor === '0' || dataColor === 'white' || dataColor === 'branco') return COLOR_WHITE;
         if (dataColor === '1' || dataColor === 'red' || dataColor === 'vermelho')  return COLOR_RED;
         if (dataColor === '2' || dataColor === 'black' || dataColor === 'preto')   return COLOR_BLACK;
+        // data-color pode ser o numero do resultado (0-14)
+        if (/^\d{1,2}$/.test(dataColor)) {
+            const fromNum = numberToColor(parseInt(dataColor));
+            if (fromNum !== null) return fromNum;
+        }
 
         // --- Via classes CSS ---
-        // Branco precisa vir antes, porque 'white' pode ser confundido com background generico
         if (classes.includes('white') || classes.includes('branco')) return COLOR_WHITE;
         if (classes.includes('red') || classes.includes('vermelho'))   return COLOR_RED;
         if (classes.includes('black') || classes.includes('preto') || classes.includes('dark')) return COLOR_BLACK;
 
-        // --- Via background-color ---
-        if (bg) {
-            // Branco
-            if (bg.includes('rgb(255, 255, 255') || bg.includes('#fff') || bg.includes('#ffffff') || bg.includes('#eee') || bg.includes('#ebebeb')) {
-                return COLOR_WHITE;
-            }
-            // Vermelho
-            if (bg.includes('#e63946') || bg.includes('#d32f2f') || bg.includes('#f44336') || bg.includes('rgb(255, 0') || bg.includes('rgb(230,')) {
-                if (!bg.includes('rgb(255, 255')) return COLOR_RED;
-            }
-            // Preto
-            if (bg.includes('rgb(0, 0, 0') || bg.includes('#000') || bg.includes('#1a1a') || bg.includes('#2d2d') || bg.includes('#333') || bg.includes('#212121')) {
-                return COLOR_BLACK;
+        // --- Via numero no texto (Blaze Double: 0=branco, 1-7=vermelho, 8-14=preto) ---
+        if (/^\d{1,2}$/.test(text)) {
+            const num = parseInt(text);
+            if (num >= 0 && num <= 14) {
+                return numberToColor(num);
             }
         }
 
-        // --- Via texto do elemento ---
-        if (text === '0' || text.includes('branco')) return COLOR_WHITE;
-        if (text === '1' || text.includes('vermelho')) return COLOR_RED;
-        if (text === '2' || text.includes('preto')) return COLOR_BLACK;
+        // --- Via computed background-color ---
+        let bg = '';
+        try {
+            const computed = window.getComputedStyle(el);
+            bg = (computed.backgroundColor || '').toLowerCase();
+        } catch (e) {}
+        // Fallback: inline style
+        if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+            bg = (el.style && el.style.backgroundColor) ? el.style.backgroundColor.toLowerCase() : '';
+        }
+
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+            // Converte rgb para analise
+            const rgbMatch = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (rgbMatch) {
+                const r = parseInt(rgbMatch[1]);
+                const g = parseInt(rgbMatch[2]);
+                const b = parseInt(rgbMatch[3]);
+
+                // Branco: RGB alto em todos
+                if (r > 200 && g > 200 && b > 200) return COLOR_WHITE;
+                // Vermelho: R alto, G e B baixos
+                if (r > 150 && g < 100 && b < 100) return COLOR_RED;
+                // Preto/escuro: tudo baixo
+                if (r < 60 && g < 60 && b < 60) return COLOR_BLACK;
+            }
+        }
+
+        // --- Via texto descritivo ---
+        if (text.includes('branco')) return COLOR_WHITE;
+        if (text.includes('vermelho')) return COLOR_RED;
+        if (text.includes('preto')) return COLOR_BLACK;
 
         return null;
     }
 
     /**
      * Detecta a fase atual do jogo lendo elementos de status na pagina.
+     * Busca por texto "Esperando", "Girando", "Girou" em toda a area do jogo.
      */
     function detectGamePhase() {
-        // TODO: ajustar seletores se necessario
+        // Estrategia 1: Busca em seletores especificos de status
         const statusSelectors = [
             '[class*="status"]',
             '[class*="timer"]',
             '[class*="waiting"]',
             '[class*="game-info"]',
-            '[class*="roulette-status"]'
+            '[class*="roulette-status"]',
+            '[class*="roulette"] [class*="message"]',
+            '[class*="double"] [class*="info"]',
+            '[class*="crash-title"]',
+            '[class*="game-message"]'
         ];
-
-        let statusText = '';
 
         for (const sel of statusSelectors) {
             try {
-                const el = document.querySelector(sel);
-                if (el && el.textContent) {
-                    statusText = el.textContent.toLowerCase();
-                    break;
+                const els = document.querySelectorAll(sel);
+                for (const el of els) {
+                    if (!el.textContent) continue;
+                    const text = el.textContent.toLowerCase().trim();
+                    if (text.includes('esperando') || text.includes('aguardando') ||
+                        text.includes('aposte agora') || text.includes('waiting')) {
+                        return 'betting';
+                    }
+                    if (text.includes('girando') || text.includes('rolling') ||
+                        text.includes('spinning')) {
+                        return 'spinning';
+                    }
+                    if (text.includes('girou') || text.includes('resultado')) {
+                        return 'result';
+                    }
                 }
-            } catch (e) {
-                // Seletor invalido
+            } catch (e) {}
+        }
+
+        // Estrategia 2: Busca texto em TODOS os botoes e elementos visiveis
+        // (a Blaze mostra "Esperando" em um botao rosa)
+        const allButtons = document.querySelectorAll('button, [role="button"], [class*="bet"]');
+        for (const btn of allButtons) {
+            if (!btn.offsetParent) continue;
+            const text = (btn.textContent || '').toLowerCase().trim();
+            if (text.includes('esperando') || text.includes('aguardando') ||
+                text.includes('aposte agora') || text === 'apostar' ||
+                text.includes('place your bet')) {
+                return 'betting';
             }
         }
 
-        // Fallback: texto geral (limitado para performance)
-        if (!statusText) {
-            statusText = (document.body.innerText || '').toLowerCase().substring(0, 2000);
-        }
-
-        // Fase de apostas
-        if (
-            statusText.includes('esperando') ||
-            statusText.includes('aguardando') ||
-            statusText.includes('faca sua aposta') ||
-            statusText.includes('aposte agora') ||
-            statusText.includes('waiting') ||
-            statusText.includes('place your bet')
-        ) {
-            return 'betting';
-        }
-
-        // Roleta girando
-        if (
-            statusText.includes('girando') ||
-            statusText.includes('girar') ||
-            statusText.includes('rolling') ||
-            statusText.includes('spinning')
-        ) {
-            return 'spinning';
-        }
-
-        // Fallback: verifica se o botao de apostar esta visivel
-        const betBtnSelectors = [
-            'button[class*="bet"]',
-            'button[class*="place"]',
-            '[class*="bet-button"]',
-            'button[class*="apostar"]'
+        // Estrategia 3: Busca texto generico na area principal do jogo
+        // Limita a area central para nao pegar texto do menu/sidebar
+        const gameAreaSelectors = [
+            'main', '#game', '#main', '[class*="game"]', '[class*="roulette"]',
+            '[class*="double"]', '[class*="content"]', '[role="main"]'
         ];
 
-        for (const sel of betBtnSelectors) {
+        for (const sel of gameAreaSelectors) {
+            try {
+                const area = document.querySelector(sel);
+                if (!area) continue;
+                const text = (area.textContent || '').toLowerCase();
+
+                if (text.includes('esperando') || text.includes('aguardando apostas') ||
+                    text.includes('aposte agora') || text.includes('waiting for bets')) {
+                    return 'betting';
+                }
+                if (text.includes('girando...') || text.includes('rolling') ||
+                    text.includes('spinning')) {
+                    return 'spinning';
+                }
+                if (text.includes('girou')) {
+                    return 'result';
+                }
+            } catch (e) {}
+        }
+
+        // Estrategia 4: Scan amplo (toda a pagina, limitado a 10KB)
+        const bodyText = (document.body.innerText || '').toLowerCase().substring(0, 10000);
+
+        if (bodyText.includes('esperando') || bodyText.includes('aguardando')) {
+            return 'betting';
+        }
+        if (bodyText.includes('girando...')) {
+            return 'spinning';
+        }
+        if (/blaze girou \d+/.test(bodyText)) {
+            return 'result';
+        }
+
+        // Estrategia 5: Verifica se botoes de cor estao clicaveis (indica fase de apostas)
+        const colorBtnSelectors = [
+            'button[class*="red"]', 'button[class*="black"]', 'button[class*="white"]',
+            '[class*="bet-color"]', '[class*="color-button"]'
+        ];
+        for (const sel of colorBtnSelectors) {
             try {
                 const btn = document.querySelector(sel);
                 if (btn && !btn.disabled && btn.offsetParent !== null) {
                     return 'betting';
                 }
-            } catch (e) { /* seletor invalido */ }
+            } catch (e) {}
         }
 
         return 'unknown';
@@ -301,23 +517,51 @@
      * Le o saldo do usuario exibido na pagina da Blaze.
      */
     function readBalance() {
-        // TODO: ajustar seletor se necessario
         const balanceSelectors = [
             '[class*="balance"]',
             '[class*="wallet"]',
             '[class*="saldo"]',
-            '[class*="money"]'
+            '[class*="money"]',
+            '[class*="currency"]',
+            '[class*="amount"]'
         ];
 
         for (const sel of balanceSelectors) {
             try {
-                const el = document.querySelector(sel);
-                if (el && el.textContent) {
-                    const text = el.textContent.replace(/[^\d.,]/g, '').replace(',', '.');
-                    const val = parseFloat(text);
-                    if (!isNaN(val) && val > 0) return val;
+                const els = document.querySelectorAll(sel);
+                for (const el of els) {
+                    if (!el.textContent) continue;
+                    const text = el.textContent.trim();
+                    // Procura por padroes como "R$ 0,00" ou "R$ 100.50" ou "0,00"
+                    const match = text.match(/R?\$?\s*([\d.,]+)/);
+                    if (match) {
+                        // Trata formato brasileiro (1.234,56) e americano (1,234.56)
+                        let numStr = match[1];
+                        // Se tem virgula como separador decimal (formato BR)
+                        if (numStr.includes(',') && numStr.indexOf(',') > numStr.lastIndexOf('.')) {
+                            numStr = numStr.replace(/\./g, '').replace(',', '.');
+                        } else if (numStr.includes(',') && !numStr.includes('.')) {
+                            numStr = numStr.replace(',', '.');
+                        }
+                        const val = parseFloat(numStr);
+                        if (!isNaN(val)) return val;
+                    }
                 }
-            } catch (e) { /* seletor invalido */ }
+            } catch (e) {}
+        }
+
+        // Fallback: procura texto "R$ X,XX" no header da pagina
+        const headerEls = document.querySelectorAll('header *, nav *, [class*="header"] *');
+        for (const el of headerEls) {
+            if (!el.children.length && el.textContent) {
+                const text = el.textContent.trim();
+                const match = text.match(/R\$\s*([\d.,]+)/);
+                if (match) {
+                    let numStr = match[1].replace(/\./g, '').replace(',', '.');
+                    const val = parseFloat(numStr);
+                    if (!isNaN(val)) return val;
+                }
+            }
         }
 
         return 0;
@@ -327,7 +571,6 @@
      * Le o tempo restante (countdown) da fase de apostas.
      */
     function readCountdown() {
-        // TODO: ajustar seletor se necessario
         const timerSelectors = [
             '[class*="timer"] span',
             '[class*="countdown"]',
@@ -559,7 +802,6 @@
      * Encontra o input de valor de aposta.
      */
     function findBetAmountInput() {
-        // TODO: ajustar seletor se necessario
         const selectors = [
             'input[class*="amount"]',
             'input[class*="bet-input"]',
@@ -598,7 +840,6 @@
      * Usa sistema de pontuacao para encontrar o melhor match.
      */
     function findColorButton(color) {
-        // TODO: ajustar seletores se necessario
         const allButtons = document.querySelectorAll(
             'button, [role="button"], [class*="color-button"], [class*="bet-color"], ' +
             '[class*="roulette-bet"], [class*="double-bet"]'
@@ -648,7 +889,6 @@
      * Encontra o botao de confirmar aposta.
      */
     function findConfirmButton() {
-        // TODO: ajustar seletor se necessario
         const selectors = [
             'button[class*="confirm"]',
             'button[class*="place-bet"]',
@@ -914,25 +1154,45 @@
 
     /**
      * Computa assinatura do historico para detectar mudancas.
+     * Usa multiplas estrategias (seletores, numeros, GIROS ANTERIORES).
      */
     function computeHistorySignature() {
+        // Metodo 1: Seletores CSS
         const selectorSets = [
             '[class*="entries"] [class*="entry"]',
             '.roulette-previous .entry',
             '.sm-box',
+            '#roulette-past .entry',
+            '#roulette-past > div',
             '[class*="double-history"] div',
             '[class*="roulette"] [class*="past"]',
-            '[class*="history"] [class*="item"]'
+            '[class*="history"] [class*="item"]',
+            '[class*="past"] [class*="box"]',
+            '[class*="previous"] [class*="entry"]'
         ];
 
         for (const selector of selectorSets) {
             try {
                 const items = document.querySelectorAll(selector);
-                if (items.length > 0) {
+                if (items.length >= 3) {
                     const first = items[0];
-                    return items.length + ':' + (first.className || '') + ':' + (first.textContent || '').trim().substring(0, 10);
+                    return 'sel:' + items.length + ':' + (first.className || '') + ':' + (first.textContent || '').trim().substring(0, 10);
                 }
-            } catch (e) { /* seletor invalido */ }
+            } catch (e) {}
+        }
+
+        // Metodo 2: Circulos numerados
+        const numbered = scanNumberedElements();
+        if (numbered.length >= 2) {
+            const nums = numbered.slice(0, 5).map(r => r.number !== undefined ? r.number : r.color);
+            return 'num:' + numbered.length + ':' + nums.join(',');
+        }
+
+        // Metodo 3: Texto "Blaze Girou X!"
+        const bodyText = (document.body.innerText || '').substring(0, 5000);
+        const girouMatch = bodyText.match(/[Bb]laze [Gg]irou (\d+)/);
+        if (girouMatch) {
+            return 'girou:' + girouMatch[1];
         }
 
         return '';
@@ -944,31 +1204,65 @@
     function checkForNewResults() {
         const newSig = computeHistorySignature();
 
-        if (newSig && newSig !== state.lastHistorySignature) {
-            state.lastHistorySignature = newSig;
+        if (!newSig || newSig === state.lastHistorySignature) return;
 
-            const selectorSets = [
-                '[class*="entries"] [class*="entry"]',
-                '.roulette-previous .entry',
-                '.sm-box',
-                '[class*="double-history"] div',
-                '[class*="roulette"] [class*="past"]',
-                '[class*="history"] [class*="item"]'
-            ];
+        state.lastHistorySignature = newSig;
 
-            for (const selector of selectorSets) {
-                try {
-                    const items = document.querySelectorAll(selector);
-                    if (items.length > 0) {
-                        const newest = items[0];
-                        const color = getColorFromElement(newest);
-                        if (color !== null) {
-                            onNewResult(color);
-                        }
-                        break;
-                    }
-                } catch (e) { /* seletor invalido */ }
+        // Tenta detectar o resultado mais recente
+        let newestColor = null;
+
+        // Metodo 1: Texto "Blaze Girou X!"
+        const bodyText = (document.body.innerText || '').substring(0, 5000);
+        const girouMatch = bodyText.match(/[Bb]laze [Gg]irou (\d+)/);
+        if (girouMatch) {
+            newestColor = numberToColor(parseInt(girouMatch[1]));
+            if (newestColor !== null) {
+                console.log('[BotBlaze] Detectado via "Blaze Girou ' + girouMatch[1] + '": ' + COLOR_NAMES[newestColor]);
+                onNewResult(newestColor);
+                return;
             }
+        }
+
+        // Metodo 2: Seletores CSS (primeiro item = mais recente)
+        const selectorSets = [
+            '[class*="entries"] [class*="entry"]',
+            '.roulette-previous .entry',
+            '.sm-box',
+            '#roulette-past .entry',
+            '#roulette-past > div',
+            '[class*="double-history"] div',
+            '[class*="roulette"] [class*="past"]',
+            '[class*="history"] [class*="item"]',
+            '[class*="past"] [class*="box"]'
+        ];
+
+        for (const selector of selectorSets) {
+            try {
+                const items = document.querySelectorAll(selector);
+                if (items.length >= 3) {
+                    const newest = items[0];
+                    newestColor = getColorFromElement(newest);
+                    if (newestColor !== null) {
+                        onNewResult(newestColor);
+                        return;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Metodo 3: Circulos numerados (primeiro = mais recente)
+        const numbered = scanNumberedElements();
+        if (numbered.length >= 2) {
+            newestColor = numbered[0].color;
+            if (newestColor !== null) {
+                onNewResult(newestColor);
+                return;
+            }
+        }
+
+        // Se temos poucos resultados no historico, tenta recarregar o historico completo
+        if (state.gameHistory.length < 3) {
+            readInitialHistory();
         }
     }
 
