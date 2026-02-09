@@ -1901,9 +1901,10 @@
                 // Persiste estatisticas para sobreviver a recarregamentos
                 saveSessionStats();
 
-                // Se a fase atual ja e 'betting', agenda o martingale/proxima aposta
+                // Se perdeu e martingale esta ativo, agenda a proxima aposta imediatamente
                 // (corrige race condition: onBettingPhase foi chamado antes do resultado ser processado)
-                if (state.botActive && state.gamePhase === 'betting') {
+                // NAO chama apos WIN - o cooldown deve ser consumido apenas pela deteccao normal de fase
+                if (state.botActive && state.gamePhase === 'betting' && state.martingaleLevel > 0) {
                     setTimeout(() => {
                         onBettingPhase();
                     }, 800);
