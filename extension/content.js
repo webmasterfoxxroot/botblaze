@@ -1166,15 +1166,17 @@
             simulateClick(colorButton);
             console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
 
-            // 3. Clica em "Apostar" / "Confirmar" se existir
+            // 3. Clica em "Começar o jogo" / "Apostar" para confirmar
             setTimeout(() => {
                 const confirmBtn = findConfirmButton();
                 if (confirmBtn) {
                     simulateClick(confirmBtn);
-                    console.log('[BotBlaze] Aposta confirmada!');
+                    console.log('[BotBlaze] Clicou em "Comecar o jogo" - Aposta confirmada!');
+                } else {
+                    console.warn('[BotBlaze] Botao "Comecar o jogo" NAO encontrado! Aposta pode nao ter sido enviada.');
                 }
-            }, 300);
-        }, 200);
+            }, 500);
+        }, 300);
 
         // Atualiza estado
         state.currentBetColor = color;
@@ -1392,39 +1394,62 @@
     }
 
     /**
-     * Encontra o botao de confirmar aposta.
+     * Encontra o botao de confirmar aposta ("Começar o jogo" na Blaze).
      */
     function findConfirmButton() {
+        // 1. Seletores CSS especificos
         const selectors = [
             'button[class*="confirm"]',
             'button[class*="place-bet"]',
             'button[class*="apostar"]',
             'button[class*="submit-bet"]',
             'button[class*="make-bet"]',
-            'button[class*="bet-button"]'
+            'button[class*="bet-button"]',
+            'button[class*="enter"]',
+            'button[class*="start"]',
+            'a[class*="enter"]',
+            'a[class*="start"]',
+            '[class*="bet"] button',
+            '[class*="bet"] a'
         ];
 
         for (const sel of selectors) {
             try {
                 const el = document.querySelector(sel);
-                if (el && !el.disabled && el.offsetParent !== null) return el;
-            } catch (e) { /* seletor invalido */ }
+                if (el && !el.disabled && el.offsetParent !== null) {
+                    const text = (el.textContent || '').toLowerCase();
+                    // Ignora botoes que nao sao de aposta
+                    if (!text.includes('depositar') && !text.includes('sacar')) {
+                        console.log('[BotBlaze] findConfirmButton: via seletor ' + sel);
+                        return el;
+                    }
+                }
+            } catch (e) {}
         }
 
-        // Fallback: procura botoes com texto relevante
-        const buttons = document.querySelectorAll('button, a[role="button"], [class*="button"]');
-        for (const btn of buttons) {
-            const text = (btn.textContent || '').toLowerCase().trim();
-            if (
-                (text.includes('apostar') || text.includes('confirmar') || text.includes('bet') ||
-                 text.includes('comecar o jogo') || text.includes('começar o jogo') ||
-                 text.includes('comecar') || text.includes('começar') || text === 'ok') &&
-                !btn.disabled && btn.offsetParent !== null
-            ) {
-                return btn;
+        // 2. Busca QUALQUER elemento visivel com texto de confirmacao
+        // (a Blaze usa tags variadas: button, a, div, span)
+        const allElements = document.querySelectorAll('button, a, div[class*="btn"], div[class*="button"], span[class*="btn"], [role="button"]');
+        for (const el of allElements) {
+            if (!el.offsetParent) continue;
+            const text = (el.textContent || '').toLowerCase().trim();
+            const len = text.length;
+            // Filtra por texto curto e relevante (evita pegar containers grandes)
+            if (len > 2 && len < 40) {
+                if (text.includes('comecar o jogo') || text.includes('começar o jogo') ||
+                    text.includes('comecar') || text.includes('começar') ||
+                    text.includes('apostar') || text.includes('confirmar') ||
+                    text === 'bet' || text === 'place bet' || text === 'ok') {
+                    // Verifica se nao e um link de navegacao
+                    if (!text.includes('depositar') && !text.includes('sacar') && !text.includes('menu')) {
+                        console.log('[BotBlaze] findConfirmButton: texto "' + text.substring(0, 30) + '" tag=' + el.tagName);
+                        return el;
+                    }
+                }
             }
         }
 
+        console.warn('[BotBlaze] findConfirmButton: NENHUM botao encontrado!');
         return null;
     }
 
