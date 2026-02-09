@@ -1140,6 +1140,48 @@
     // ===================== INTERACAO COM O DOM (APOSTAR) =====================
 
     /**
+     * Aguarda o botao "Começar o jogo" ficar disponivel (sair de "Esperando") e clica.
+     * Faz polling a cada 600ms, ate 8 tentativas (~5 segundos).
+     */
+    function waitAndClickConfirm(attempt) {
+        const MAX_ATTEMPTS = 8;
+        const POLL_INTERVAL = 600;
+
+        // Busca o botao na area .place-bet
+        const btn = document.querySelector('.place-bet button') ||
+                    document.querySelector('[class*="place-bet"] button') ||
+                    document.querySelector('button[class*="shared-button"]');
+
+        if (!btn) {
+            if (attempt < MAX_ATTEMPTS) {
+                console.log('[BotBlaze] Confirm: botao nao encontrado, tentativa ' + (attempt + 1) + '/' + MAX_ATTEMPTS);
+                setTimeout(() => waitAndClickConfirm(attempt + 1), POLL_INTERVAL);
+            } else {
+                console.warn('[BotBlaze] Confirm: desistiu apos ' + MAX_ATTEMPTS + ' tentativas');
+            }
+            return;
+        }
+
+        const text = (btn.textContent || '').toLowerCase().trim();
+
+        // Se o botao mostra "esperando", "aguarde", "waiting" = ainda nao liberou
+        if (text.includes('esperando') || text.includes('aguard') || text.includes('waiting') ||
+            text.includes('processing') || text.includes('carregando')) {
+            if (attempt < MAX_ATTEMPTS) {
+                console.log('[BotBlaze] Confirm: botao mostra "' + text.substring(0, 20) + '", aguardando... (' + (attempt + 1) + '/' + MAX_ATTEMPTS + ')');
+                setTimeout(() => waitAndClickConfirm(attempt + 1), POLL_INTERVAL);
+            } else {
+                console.warn('[BotBlaze] Confirm: botao ficou em "' + text.substring(0, 20) + '" por muito tempo, desistindo');
+            }
+            return;
+        }
+
+        // Botao disponivel - clica!
+        simulateClick(btn);
+        console.log('[BotBlaze] Confirm: clicou em "' + text.substring(0, 30) + '" (tentativa ' + (attempt + 1) + ')');
+    }
+
+    /**
      * Realiza uma aposta na Blaze interagindo com o DOM.
      */
     function placeBet(color, amount) {
@@ -1166,42 +1208,9 @@
             simulateClick(colorButton);
             console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
 
-            // 3. Clica em "Começar o jogo" / "Apostar" para confirmar
-            setTimeout(() => {
-                const confirmBtn = findConfirmButton();
-                if (confirmBtn) {
-                    // Tenta click normal + dispatchEvent para garantir
-                    simulateClick(confirmBtn);
-                    console.log('[BotBlaze] Clicou em "Comecar o jogo" - tag=' + confirmBtn.tagName +
-                        ' class=' + (confirmBtn.className || '').toString().substring(0, 50) +
-                        ' text=' + (confirmBtn.textContent || '').trim().substring(0, 30));
-
-                    // Fallback: se click nao funcionou, tenta novamente apos 400ms
-                    setTimeout(() => {
-                        // Verifica se ainda esta na fase de aposta (se nao processou)
-                        const phase = detectGamePhase();
-                        if (phase === 'betting' && state.waitingResult) {
-                            const btn2 = findConfirmButton();
-                            if (btn2) {
-                                btn2.click();
-                                console.log('[BotBlaze] Retry click no confirm button');
-                            }
-                        }
-                    }, 400);
-                } else {
-                    console.warn('[BotBlaze] Botao "Comecar o jogo" NAO encontrado! Tentando .place-bet button direto...');
-                    // Tentativa direta de emergencia
-                    try {
-                        const emergency = document.querySelector('.place-bet button') ||
-                                          document.querySelector('[class*="place-bet"] button') ||
-                                          document.querySelector('button[class*="shared-button"]');
-                        if (emergency) {
-                            emergency.click();
-                            console.log('[BotBlaze] Emergencia: clicou em ' + (emergency.textContent || '').trim().substring(0, 30));
-                        }
-                    } catch (e) {}
-                }
-            }, 700);
+            // 3. Aguarda botao "Começar o jogo" ficar disponivel e clica
+            // O botao pode mostrar "Esperando" entre rodadas - precisa aguardar
+            waitAndClickConfirm(0);
         }, 300);
 
         // Atualiza estado
