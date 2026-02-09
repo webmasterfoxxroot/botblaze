@@ -103,14 +103,13 @@
                 </div>
 
                 <div class="field">
-                    <label class="field-label">Estrategia</label>
+                    <label class="field-label">Nivel de Agressividade</label>
                     <select id="strategy" class="field-input">
-                        <option value="color_frequency">Frequencia de Cor</option>
-                        <option value="martingale">Martingale Puro</option>
-                        <option value="pattern">Padrao de Sequencia</option>
-                        <option value="manual">Manual (so via extensao)</option>
+                        <option value="conservador">Conservador - Aposta pouco, mais seguro</option>
+                        <option value="moderado" selected>Moderado - Equilibrado (recomendado)</option>
+                        <option value="agressivo">Agressivo - Aposta mais, mais risco</option>
                     </select>
-                    <p class="field-hint">Metodo de analise para escolher a cor</p>
+                    <p class="field-hint" id="strategy-hint">O bot analisa 7 padroes e so aposta quando tem confianca suficiente</p>
                 </div>
 
                 <div class="field">
@@ -120,10 +119,54 @@
                 </div>
             </div>
 
-            <!-- Martingale -->
+            <!-- Analise Inteligente -->
             <div class="settings-card">
                 <div class="card-title">
                     <div class="card-title-icon icon-blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    </div>
+                    <div>
+                        <h2>Analise Inteligente</h2>
+                        <p>7 analisadores de padroes combinados</p>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="field-label">Confianca Minima (%)</label>
+                    <input type="number" id="min_confidence" class="field-input" min="30" max="90" step="5" value="60">
+                    <p class="field-hint">So aposta quando a confianca combinada dos sinais atinge este valor. Maior = mais seguro, menos apostas.</p>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <div class="toggle-label">Apostar no Branco (x14)</div>
+                        <div class="toggle-desc">Permite apostar no branco quando o intervalo esta muito alto. Raro mas paga 14x.</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="bet_white" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+
+                <div style="margin-top: 16px; background: rgba(255,255,255,.03); border-radius: 10px; padding: 14px;">
+                    <p style="font-size: 12px; font-weight: 700; margin-bottom: 10px; color: var(--text);">Como funciona:</p>
+                    <div style="font-size: 11px; color: var(--text-muted); line-height: 1.7;">
+                        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:#ef4444;flex-shrink:0;">1.</span> <b>Sequencia</b> - 3+ da mesma cor seguida, aposta na oposta</div>
+                        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:#ef4444;flex-shrink:0;">2.</span> <b>Alternancia</b> - Detecta padrao R-B-R-B e continua</div>
+                        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:#ef4444;flex-shrink:0;">3.</span> <b>Frequencia</b> - Aposta na cor que menos apareceu (20 jogos)</div>
+                        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:#ef4444;flex-shrink:0;">4.</span> <b>Pares</b> - Detecta padrao RR-BB-RR de pares</div>
+                        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:#fbbf24;flex-shrink:0;">5.</span> <b>Branco</b> - Preve quando o branco esta atrasado</div>
+                        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:#ef4444;flex-shrink:0;">6.</span> <b>Ausencia</b> - Cor que nao aparece ha 5+ rodadas</div>
+                        <div style="display:flex;gap:8px;"><span style="color:#ef4444;flex-shrink:0;">7.</span> <b>Tendencia</b> - Compara ultimos 5 vs anteriores 5</div>
+                    </div>
+                    <p style="font-size: 11px; color: var(--accent); margin-top: 10px;">Cada analisador vota em uma cor com uma confianca. O bot so aposta quando os sinais concordam.</p>
+                </div>
+            </div>
+
+            <!-- Martingale -->
+            <div class="settings-card">
+                <div class="card-title">
+                    <div class="card-title-icon" style="background:rgba(139,92,246,.12);color:#8b5cf6;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                     </div>
                     <div>
@@ -255,7 +298,9 @@
             if (data.settings) {
                 const s = data.settings;
                 document.getElementById('bet_amount').value = s.bet_amount || 2;
-                document.getElementById('strategy').value = s.strategy || 'color_frequency';
+                document.getElementById('strategy').value = s.strategy || 'moderado';
+                document.getElementById('min_confidence').value = s.min_confidence || 60;
+                document.getElementById('bet_white').checked = s.bet_white !== false && s.bet_white !== 0;
                 document.getElementById('martingale_enabled').checked = !!s.martingale_enabled;
                 document.getElementById('martingale_max').value = s.martingale_max || 3;
                 document.getElementById('martingale_multiplier').value = s.martingale_multiplier || 2.0;
@@ -263,6 +308,7 @@
                 document.getElementById('stop_gain').value = s.stop_gain || 100;
                 document.getElementById('max_bets_per_day').value = s.max_bets_per_day || 50;
                 document.getElementById('auto_bet').checked = !!s.auto_bet;
+                updateStrategyHint();
             }
         } catch (err) {
             console.error('Erro:', err);
@@ -279,6 +325,8 @@
         const settings = {
             bet_amount: parseFloat(document.getElementById('bet_amount').value),
             strategy: document.getElementById('strategy').value,
+            min_confidence: parseInt(document.getElementById('min_confidence').value),
+            bet_white: document.getElementById('bet_white').checked ? 1 : 0,
             martingale_enabled: document.getElementById('martingale_enabled').checked ? 1 : 0,
             martingale_max: parseInt(document.getElementById('martingale_max').value),
             martingale_multiplier: parseFloat(document.getElementById('martingale_multiplier').value),
@@ -308,6 +356,26 @@
         btn.disabled = false;
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Salvar Configuracoes';
     }
+
+    // ── STRATEGY HINTS ──────────────────────────────────────────────────────────
+
+    const strategyHints = {
+        conservador: 'Confianca minima 75%. Pula mais rodadas, aposta so em sinais fortes. Ideal para proteger banca.',
+        moderado: 'Confianca minima 60%. Equilibrio entre seguranca e frequencia de apostas. Recomendado para a maioria.',
+        agressivo: 'Confianca minima 45%. Aposta com mais frequencia, aceita sinais mais fracos. Maior risco e potencial retorno.'
+    };
+
+    const strategyConfidence = { conservador: 75, moderado: 60, agressivo: 45 };
+
+    function updateStrategyHint() {
+        const val = document.getElementById('strategy').value;
+        const hint = document.getElementById('strategy-hint');
+        const confInput = document.getElementById('min_confidence');
+        if (hint && strategyHints[val]) hint.textContent = strategyHints[val];
+        if (confInput && strategyConfidence[val]) confInput.value = strategyConfidence[val];
+    }
+
+    document.getElementById('strategy').addEventListener('change', updateStrategyHint);
 
     loadSettings();
     </script>

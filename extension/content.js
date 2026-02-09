@@ -142,6 +142,19 @@
                 state.settings.auto_bet === true ||
                 state.settings.auto_bet == 1
             );
+            // Aplica configuracoes de analise inteligente
+            if (state.settings.min_confidence) {
+                analysis.minConfidence = parseInt(state.settings.min_confidence);
+            }
+            // Nivel de agressividade override
+            if (state.settings.strategy === 'conservador') {
+                analysis.minConfidence = Math.max(analysis.minConfidence, 75);
+            } else if (state.settings.strategy === 'agressivo') {
+                analysis.minConfidence = Math.min(analysis.minConfidence, 45);
+            }
+            console.log('[BotBlaze] Nivel: ' + (state.settings.strategy || 'moderado') +
+                ' | Confianca min: ' + analysis.minConfidence + '%' +
+                ' | Branco: ' + (state.settings.bet_white !== 0 ? 'Sim' : 'Nao'));
         } else {
             state.settings = getDefaultSettings();
         }
@@ -157,7 +170,9 @@
     function getDefaultSettings() {
         return {
             bet_amount: 2.00,
-            strategy: 'frequency',
+            strategy: 'moderado',
+            min_confidence: 60,
+            bet_white: 1,
             martingale_enabled: false,
             martingale_max: 3,
             martingale_multiplier: 2.0,
@@ -897,6 +912,9 @@
     // ----- Analisador 5: Previsao de Branco -----
     // Rastreia intervalos entre brancos e preve quando esta "atrasado".
     function analyzeWhitePrediction(history) {
+        // Verifica se apostas no branco estao habilitadas
+        if (state.settings && state.settings.bet_white === 0) return null;
+
         // Conta rodadas desde o ultimo branco
         let gap = 0;
         for (let i = 0; i < history.length; i++) {
