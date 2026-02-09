@@ -1,5 +1,5 @@
 <?php
-// BotBlaze API - Authentication (login, register, token validation)
+// BotBlaze API - Authentication (login, register, token validation, logout)
 require_once __DIR__ . '/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -33,10 +33,17 @@ switch ($action) {
             jsonResponse(['error' => 'Conta bloqueada. Entre em contato com o suporte'], 403);
         }
 
-        // Generate new API token
-        $token = bin2hex(random_bytes(32));
-        $stmt = $db->prepare("UPDATE users SET api_token = ? WHERE id = ?");
-        $stmt->execute([$token, $user['id']]);
+        // Detecta tipo de dispositivo pelo header ou parametro
+        $deviceType = $input['device_type'] ?? 'web';
+        if (!in_array($deviceType, ['web', 'extension', 'admin'])) {
+            $deviceType = 'web';
+        }
+
+        // Cria nova sessao (nao apaga as existentes - permite multiplos logins)
+        $token = createSession($user['id'], $deviceType);
+
+        // Tambem atualiza users.api_token para compatibilidade
+        $db->prepare("UPDATE users SET api_token = ? WHERE id = ?")->execute([$token, $user['id']]);
 
         // Get subscription status
         $subscription = hasActiveSubscription($user['id']);
@@ -93,11 +100,16 @@ switch ($action) {
 
         // Create user
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        $token = bin2hex(random_bytes(32));
 
-        $stmt = $db->prepare("INSERT INTO users (name, email, password, api_token) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$name, $email, $hashedPassword, $token]);
+        $stmt = $db->prepare("INSERT INTO users (name, email, password) VALUES (?, ?, ?)");
+        $stmt->execute([$name, $email, $hashedPassword]);
         $userId = $db->lastInsertId();
+
+        // Cria sessao
+        $token = createSession($userId, 'web');
+
+        // Atualiza users.api_token para compatibilidade
+        $db->prepare("UPDATE users SET api_token = ? WHERE id = ?")->execute([$token, $userId]);
 
         // Create default user_settings row
         $stmt = $db->prepare("INSERT INTO user_settings (user_id) VALUES (?)");
@@ -144,6 +156,16 @@ switch ($action) {
         ]);
         break;
 
+    // ── LOGOUT ────────────────────────────────────────────────────────────
+    case 'logout':
+        $header = getAuthHeader();
+        $token = str_replace('Bearer ', '', $header);
+        if ($token) {
+            deleteSession($token);
+        }
+        jsonResponse(['success' => true, 'message' => 'Sessao encerrada']);
+        break;
+
     default:
-        jsonResponse(['error' => 'Acao invalida. Use: login, register ou validate'], 400);
+        jsonResponse(['error' => 'Acao invalida. Use: login, register, validate ou logout'], 400);
 }

@@ -75,7 +75,8 @@
                     action: 'register',
                     name: form.get('name'),
                     email: form.get('email'),
-                    password: form.get('password')
+                    password: form.get('password'),
+                    device_type: 'web'
                 })
             });
             const data = await res.json();

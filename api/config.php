@@ -63,11 +63,60 @@ function validateToken() {
     if (!$token) jsonResponse(['error' => 'Token obrigatorio'], 401);
 
     $db = getDB();
+
+    // Busca na tabela sessions (suporta multiplos tokens por usuario)
+    $stmt = $db->prepare("
+        SELECT u.id, u.name, u.email, u.role, u.status
+        FROM sessions ses
+        JOIN users u ON ses.user_id = u.id
+        WHERE ses.token = ? AND u.status = 'active'
+        LIMIT 1
+    ");
+    $stmt->execute([$token]);
+    $user = $stmt->fetch();
+
+    if ($user) {
+        // Atualiza last_used_at da sessao
+        $db->prepare("UPDATE sessions SET last_used_at = NOW() WHERE token = ?")->execute([$token]);
+        return $user;
+    }
+
+    // Fallback: busca na coluna antiga users.api_token (compatibilidade)
     $stmt = $db->prepare("SELECT id, name, email, role, status FROM users WHERE api_token = ? AND status = 'active'");
     $stmt->execute([$token]);
     $user = $stmt->fetch();
     if (!$user) jsonResponse(['error' => 'Token invalido'], 401);
     return $user;
+}
+
+/**
+ * Cria uma nova sessao para o usuario.
+ * Permite multiplos tokens (web, extensao, admin) ao mesmo tempo.
+ */
+function createSession($userId, $deviceType = 'web') {
+    $db = getDB();
+    $token = bin2hex(random_bytes(32));
+
+    $stmt = $db->prepare("INSERT INTO sessions (user_id, token, device_type) VALUES (?, ?, ?)");
+    $stmt->execute([$userId, $token, $deviceType]);
+
+    return $token;
+}
+
+/**
+ * Remove uma sessao especifica (logout).
+ */
+function deleteSession($token) {
+    $db = getDB();
+    $db->prepare("DELETE FROM sessions WHERE token = ?")->execute([$token]);
+}
+
+/**
+ * Remove todas as sessoes de um usuario (bloquear usuario).
+ */
+function deleteAllSessions($userId) {
+    $db = getDB();
+    $db->prepare("DELETE FROM sessions WHERE user_id = ?")->execute([$userId]);
 }
 
 // Check if user has active subscription
