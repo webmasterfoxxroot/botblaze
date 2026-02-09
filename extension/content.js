@@ -1211,9 +1211,11 @@
             simulateClick(colorButton);
             console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
 
-            // 3. Aguarda botao "Começar o jogo" ficar disponivel e clica
-            // O botao pode mostrar "Esperando" entre rodadas - precisa aguardar
-            waitAndClickConfirm(0);
+            // 3. Aguarda 500ms para Blaze processar a selecao de cor,
+            // depois aguarda botao "Começar o jogo" ficar disponivel e clica
+            setTimeout(() => {
+                waitAndClickConfirm(0);
+            }, 500);
         }, 300);
 
         // Atualiza estado
@@ -1507,7 +1509,6 @@
      */
     function simulateClick(element) {
         try {
-            element.focus();
             const rect = element.getBoundingClientRect();
             const x = rect.left + rect.width / 2;
             const y = rect.top + rect.height / 2;
@@ -1520,19 +1521,14 @@
                 clientY: y,
                 screenX: x,
                 screenY: y,
-                button: 0,
-                buttons: 1
+                button: 0
             };
 
-            // Pointer events (React e frameworks modernos)
-            element.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse' }));
-            element.dispatchEvent(new MouseEvent('mousedown', opts));
-            element.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse' }));
-            element.dispatchEvent(new MouseEvent('mouseup', opts));
+            // Sequencia minima: pointerdown → pointerup → click
+            // React usa SyntheticEvent via delegacao no root - 1 click = 1 evento
+            element.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 1 }));
+            element.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 0 }));
             element.dispatchEvent(new MouseEvent('click', opts));
-
-            // Fallback nativo
-            element.click();
         } catch (e) {
             try { element.click(); } catch (e2) {}
         }
