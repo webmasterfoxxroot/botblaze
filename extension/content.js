@@ -1641,20 +1641,96 @@
             deepest = deepest.firstElementChild;
         }
 
-        // Clica no elemento pai (div.red) - alguns React handlers escutam aqui
-        element.click();
+        // Tenta multiplas abordagens para garantir que React processe o click
 
-        // Se tem filho diferente, clica nele tambem apos 50ms
-        // (garante que o click chega no target correto do React)
+        // 1. .click() nativo no pai e filho
+        element.click();
         if (deepest !== element) {
-            setTimeout(() => { deepest.click(); }, 50);
+            deepest.click();
         }
 
-        console.log('[BotBlaze] Cor: .click() em ' + element.tagName +
-            '.' + (element.className || '').toString().substring(0, 20) +
-            ' + filho ' + deepest.tagName +
-            ' texto="' + (deepest.textContent || '').trim().substring(0, 10) + '"');
+        console.log('[BotBlaze] Cor: tentando click em ' + element.tagName +
+            '.' + (element.className || '').toString().substring(0, 25));
+
+        // 2. Verifica apos 150ms se "selected" apareceu na classe
+        setTimeout(() => {
+            const cls = (element.className || '').toString().toLowerCase();
+            if (cls.includes('selected') || cls.includes('active') || cls.includes('checked')) {
+                console.log('[BotBlaze] Cor: CONFIRMADO - classe "selected" detectada');
+                return;
+            }
+
+            console.log('[BotBlaze] Cor: "selected" NAO apareceu. Tentando React fiber...');
+
+            // 3. Tenta acessar React fiber diretamente
+            if (triggerReactOnClick(element) || triggerReactOnClick(deepest)) {
+                console.log('[BotBlaze] Cor: click via React fiber');
+            } else {
+                // 4. Ultimo recurso: dispatchEvent com coordenadas reais
+                console.log('[BotBlaze] Cor: tentando dispatchEvent como fallback');
+                const rect = deepest.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+                const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0 };
+                deepest.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 1 }));
+                deepest.dispatchEvent(new MouseEvent('mousedown', { ...opts, buttons: 1 }));
+                deepest.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse', buttons: 0 }));
+                deepest.dispatchEvent(new MouseEvent('mouseup', opts));
+                deepest.dispatchEvent(new MouseEvent('click', opts));
+            }
+
+            // 5. Verifica novamente apos 200ms
+            setTimeout(() => {
+                const cls2 = (element.className || '').toString().toLowerCase();
+                if (cls2.includes('selected')) {
+                    console.log('[BotBlaze] Cor: CONFIRMADO (apos retry)');
+                } else {
+                    console.warn('[BotBlaze] Cor: AVISO - "selected" ainda nao apareceu');
+                }
+            }, 200);
+        }, 150);
+
         console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
+    }
+
+    /**
+     * Acessa o React fiber/props de um elemento DOM para chamar onClick diretamente.
+     * Bypassa o sistema de eventos e funciona mesmo quando handlers nao estao attachados.
+     */
+    function triggerReactOnClick(element) {
+        try {
+            const keys = Object.keys(element);
+
+            // Tenta __reactProps$ (React 17+)
+            const propsKey = keys.find(k => k.startsWith('__reactProps$'));
+            if (propsKey) {
+                const props = element[propsKey];
+                if (props && typeof props.onClick === 'function') {
+                    props.onClick(new MouseEvent('click', { bubbles: true }));
+                    return true;
+                }
+            }
+
+            // Tenta __reactFiber$ / __reactInternalInstance$
+            const fiberKey = keys.find(k =>
+                k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$')
+            );
+            if (fiberKey) {
+                let fiber = element[fiberKey];
+                let depth = 0;
+                while (fiber && depth < 10) {
+                    if (fiber.memoizedProps && typeof fiber.memoizedProps.onClick === 'function') {
+                        fiber.memoizedProps.onClick(new MouseEvent('click', { bubbles: true }));
+                        return true;
+                    }
+                    fiber = fiber.return;
+                    depth++;
+                }
+            }
+        } catch (e) {
+            console.warn('[BotBlaze] triggerReactOnClick erro:', e.message);
+        }
+        return false;
     }
 
     /**
@@ -1794,10 +1870,19 @@
 
                 if (realWon) {
                     state.sessionWins++;
+                    const wasInMartingale = mgLevelAtBet > 0;
                     state.martingaleLevel = 0;
                     state.lastBetResult = 'win';
-                    state._mgCooldown = 0; // Win limpa cooldown
-                    console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+
+                    if (wasInMartingale) {
+                        // Ganhou no martingale: PARA e espera proximo sinal
+                        state._mgCooldown = 1; // Pula 1 rodada antes de apostar de novo
+                        state.lastBetColor = null; // Limpa cor pra nao repetir
+                        console.log('[BotBlaze] VITORIA no Martingale nv ' + mgLevelAtBet + '! Recuperou R$' + profit.toFixed(2) + '. Pausando 1 rodada.');
+                    } else {
+                        state._mgCooldown = 0; // Win normal limpa cooldown
+                        console.log('[BotBlaze] VITORIA! +R$' + profit.toFixed(2) + ' | Total: R$' + state.sessionProfit.toFixed(2));
+                    }
                 } else {
                     state.sessionLosses++;
                     state.lastBetResult = 'loss';
@@ -1875,7 +1960,7 @@
         if (state._betPending) return; // Ja tem aposta agendada
         if (Date.now() - state.lastBetTime < MIN_BET_INTERVAL) return;
 
-        // Cooldown apos martingale estourar - pula rodadas
+        // Cooldown pos-martingale (apos win ou max) - pula rodadas
         if (state._mgCooldown > 0) {
             state._mgCooldown--;
             console.log('[BotBlaze] Cooldown pos-martingale: pulando (' + (state._mgCooldown + 1) + ' restantes)');
