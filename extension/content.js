@@ -1118,18 +1118,22 @@
         const maxBets  = parseInt(state.settings.max_bets_per_day) || 100;
 
         if (state.sessionProfit <= -stopLoss) {
-            console.log('[BotBlaze] STOP LOSS atingido: R$' + Math.abs(state.sessionProfit).toFixed(2));
+            state._stopReason = 'STOP LOSS: R$' + Math.abs(state.sessionProfit).toFixed(2);
+            console.log('[BotBlaze] ' + state._stopReason);
             return false;
         }
         if (state.sessionProfit >= stopGain) {
-            console.log('[BotBlaze] STOP GAIN atingido: R$' + state.sessionProfit.toFixed(2));
+            state._stopReason = 'STOP GAIN: R$' + state.sessionProfit.toFixed(2);
+            console.log('[BotBlaze] ' + state._stopReason);
             return false;
         }
         if (state.todayBets >= maxBets) {
-            console.log('[BotBlaze] MAX APOSTAS/DIA atingido: ' + state.todayBets + '/' + maxBets);
+            state._stopReason = 'MAX APOSTAS: ' + state.todayBets + '/' + maxBets;
+            console.log('[BotBlaze] ' + state._stopReason);
             return false;
         }
 
+        state._stopReason = null;
         return true;
     }
 
@@ -2075,8 +2079,18 @@
         };
 
         if (ids.status) {
-            ids.status.textContent = state.botActive ? 'ATIVO' : 'PARADO';
-            ids.status.className = state.botActive ? 'bb-on' : 'bb-off';
+            if (state.botActive) {
+                ids.status.textContent = 'ATIVO';
+                ids.status.className = 'bb-on';
+            } else if (state._stopReason) {
+                ids.status.textContent = state._stopReason;
+                ids.status.className = 'bb-red';
+                ids.status.style.fontSize = '10px';
+            } else {
+                ids.status.textContent = 'PARADO';
+                ids.status.className = 'bb-off';
+                ids.status.style.fontSize = '';
+            }
         }
         if (ids.balance) {
             ids.balance.textContent = 'R$ ' + state.balance.toFixed(2);
