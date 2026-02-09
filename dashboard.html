@@ -313,25 +313,51 @@
         }
     }
 
-    function downloadExtension() {
+    async function downloadExtension() {
         const btn = document.getElementById('btn-download-ext');
         btn.disabled = true;
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M2 12l10 10 10-10"/></svg> Baixando...';
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M2 12l10 10 10-10"/></svg> Verificando...';
 
-        // Download direto via link com token na URL
-        const downloadUrl = API_URL + '/extension.php?token=' + encodeURIComponent(token);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = 'BotBlaze-Extension.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast('Download iniciado!');
+        try {
+            // Primeiro verifica se o endpoint funciona
+            const checkRes = await fetch(API_URL + '/extension.php?token=' + encodeURIComponent(token) + '&check=1');
+            const checkData = await checkRes.json();
 
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Baixar';
-        }, 2000);
+            if (!checkData.success || !checkData.diagnostics) {
+                showToast('Erro: ' + (checkData.error || 'Falha na verificacao'));
+                return;
+            }
+
+            const d = checkData.diagnostics;
+            if (!d.zip_available) {
+                showToast('Erro: Modulo ZIP nao ativo no PHP. Ative php_zip.dll no php.ini');
+                return;
+            }
+            if (!d.temp_writable) {
+                showToast('Erro: Pasta temporaria sem permissao de escrita');
+                return;
+            }
+            if (!d.has_subscription) {
+                showToast('Erro: Assinatura nao encontrada');
+                return;
+            }
+
+            // Tudo OK - faz o download
+            btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M2 12l10 10 10-10"/></svg> Baixando...';
+
+            const downloadUrl = API_URL + '/extension.php?token=' + encodeURIComponent(token);
+            window.location.href = downloadUrl;
+            showToast('Download iniciado!');
+
+        } catch (err) {
+            console.error('Erro download:', err);
+            showToast('Erro de conexao com o servidor');
+        } finally {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Baixar';
+            }, 3000);
+        }
     }
 
     function showToast(msg) {
