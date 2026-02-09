@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "description": "Bot de apostas automaticas para Blaze Double",
     "permissions": ["storage", "activeTab"],
-    "host_permissions": ["https://blaze.bet.br/*", "https://blaze-4.com/*"],
+    "host_permissions": ["https://blaze.bet.br/*", "https://blaze-4.com/*", "http://localhost/*"],
     "content_scripts": [
         {
             "matches": [
