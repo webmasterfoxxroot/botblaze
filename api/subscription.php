@@ -12,10 +12,17 @@ $db = getDB();
 // Get current active subscription
 $subscription = hasActiveSubscription($user['id']);
 
+// Get user's api_token
+$stmtToken = $db->prepare("SELECT api_token FROM users WHERE id = ?");
+$stmtToken->execute([$user['id']]);
+$tokenRow = $stmtToken->fetch();
+
 $response = [
     'success' => true,
     'subscription' => null,
+    'api_token' => $tokenRow['api_token'] ?? null,
     'plans' => [],
+    'days_remaining' => 0,
 ];
 
 if ($subscription) {
@@ -30,6 +37,7 @@ if ($subscription) {
         'days_remaining' => $daysRemaining,
         'features'       => explode(',', $subscription['features'] ?? ''),
     ];
+    $response['days_remaining'] = $daysRemaining;
 }
 
 // Always return available plans (for upgrade or new purchase)

@@ -5,6 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configuracoes - BotBlaze</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* ── SECTION CARDS ───────────────────────────────── */
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .settings-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+        .settings-card-full { grid-column: 1 / -1; }
+
+        .card-title { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+        .card-title-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .card-title-icon svg { width: 18px; height: 18px; }
+        .card-title h2 { font-size: 15px; font-weight: 700; }
+        .card-title p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .icon-red { background: rgba(230,57,70,.12); color: #e63946; }
+        .icon-blue { background: rgba(88,166,255,.12); color: #58a6ff; }
+        .icon-green { background: rgba(46,204,113,.12); color: #2ecc71; }
+        .icon-gold { background: rgba(210,153,34,.12); color: #d29922; }
+
+        /* ── FORM IMPROVEMENTS ───────────────────────────── */
+        .field { margin-bottom: 18px; }
+        .field:last-child { margin-bottom: 0; }
+        .field-label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+        .field-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+        .field-input { width: 100%; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 14px; transition: border-color .2s; }
+        .field-input:focus { outline: none; border-color: var(--accent); }
+        select.field-input { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+
+        /* ── TOGGLE SWITCH ────────────────────────────────── */
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+        .toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .toggle-row:first-child { padding-top: 0; }
+        .toggle-info { flex: 1; }
+        .toggle-label { font-size: 14px; font-weight: 600; }
+        .toggle-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+        .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; margin-left: 16px; }
+        .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .toggle-track { position: absolute; inset: 0; background: rgba(255,255,255,.1); border-radius: 12px; cursor: pointer; transition: background .2s; }
+        .toggle-track::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+        .toggle input:checked + .toggle-track { background: var(--accent); }
+        .toggle input:checked + .toggle-track::after { transform: translateX(20px); }
+
+        /* ── INLINE FIELDS ────────────────────────────────── */
+        .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        /* ── SAVE AREA ────────────────────────────────────── */
+        .save-bar { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+        .save-btn { padding: 12px 40px; border-radius: 10px; border: none; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; transition: all .2s; display: flex; align-items: center; gap: 8px; }
+        .save-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .save-btn:disabled { opacity: .5; cursor: default; transform: none; }
+        .save-btn svg { width: 18px; height: 18px; }
+
+        /* ── TOAST ────────────────────────────────────────── */
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px; color: #fff; font-size: 13px; font-weight: 600; z-index: 2000; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); animation: toastIn .3s ease; }
+        .toast-success { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .toast-error { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        @keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @media (max-width: 768px) {
+            .settings-grid { grid-template-columns: 1fr; }
+            .fields-row { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -12,6 +73,7 @@
         <ul class="navbar-nav">
             <li><a href="dashboard.html">Dashboard</a></li>
             <li><a href="settings.html">Configuracoes</a></li>
+            <li id="admin-link" style="display:none;"><a href="admin.html">Admin</a></li>
             <li><a href="#" id="logout-btn">Sair</a></li>
         </ul>
     </nav>
@@ -19,81 +81,140 @@
     <div class="container dashboard">
         <div class="page-header">
             <h1>Configuracoes do Bot</h1>
-            <span class="badge badge-green" id="save-status" style="display:none;">Salvo!</span>
         </div>
 
-        <div id="error-msg" class="alert alert-error" style="display:none;"></div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="settings-grid">
             <!-- Aposta -->
-            <div class="card">
-                <div class="card-header"><h2>Aposta</h2></div>
-                <div class="form-group">
-                    <label class="form-label">Valor da Aposta (R$)</label>
-                    <input type="number" id="bet_amount" class="form-input" min="0.10" max="1000" step="0.10" value="2.00">
-                    <p class="form-hint">Valor base de cada aposta</p>
+            <div class="settings-card">
+                <div class="card-title">
+                    <div class="card-title-icon icon-red">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div>
+                        <h2>Aposta</h2>
+                        <p>Valor e estrategia de aposta</p>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Estrategia</label>
-                    <select id="strategy" class="form-input">
+
+                <div class="field">
+                    <label class="field-label">Valor da Aposta (R$)</label>
+                    <input type="number" id="bet_amount" class="field-input" min="0.10" max="1000" step="0.10" value="2.00">
+                    <p class="field-hint">Valor base de cada aposta</p>
+                </div>
+
+                <div class="field">
+                    <label class="field-label">Estrategia</label>
+                    <select id="strategy" class="field-input">
                         <option value="color_frequency">Frequencia de Cor</option>
                         <option value="martingale">Martingale Puro</option>
                         <option value="pattern">Padrao de Sequencia</option>
                         <option value="manual">Manual (so via extensao)</option>
                     </select>
-                    <p class="form-hint">Metodo de analise para escolher a cor</p>
+                    <p class="field-hint">Metodo de analise para escolher a cor</p>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Max Apostas por Dia</label>
-                    <input type="number" id="max_bets_per_day" class="form-input" min="1" max="500" value="50">
-                </div>
-                <div class="form-group" style="display: flex; align-items: center; gap: 12px;">
-                    <label class="form-label" style="margin-bottom: 0;">Bot Automatico</label>
-                    <input type="checkbox" id="auto_bet" checked style="width: 20px; height: 20px;">
-                    <p class="form-hint" style="margin-top: 0;">Apostar automaticamente quando detectar oportunidade</p>
+
+                <div class="field">
+                    <label class="field-label">Max Apostas por Dia</label>
+                    <input type="number" id="max_bets_per_day" class="field-input" min="1" max="500" value="50">
+                    <p class="field-hint">Limite diario de apostas automaticas</p>
                 </div>
             </div>
 
             <!-- Martingale -->
-            <div class="card">
-                <div class="card-header"><h2>Martingale</h2></div>
-                <div class="form-group" style="display: flex; align-items: center; gap: 12px;">
-                    <label class="form-label" style="margin-bottom: 0;">Ativar Martingale</label>
-                    <input type="checkbox" id="martingale_enabled" style="width: 20px; height: 20px;">
+            <div class="settings-card">
+                <div class="card-title">
+                    <div class="card-title-icon icon-blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    </div>
+                    <div>
+                        <h2>Martingale</h2>
+                        <p>Dobra a aposta apos perda</p>
+                    </div>
                 </div>
-                <p class="form-hint" style="margin-bottom: 16px;">Dobra a aposta apos cada perda para recuperar</p>
-                <div class="form-group">
-                    <label class="form-label">Niveis Maximo</label>
-                    <input type="number" id="martingale_max" class="form-input" min="1" max="10" value="3">
-                    <p class="form-hint">Quantas vezes dobrar antes de parar (ex: 3 = aposta ate 3x)</p>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <div class="toggle-label">Ativar Martingale</div>
+                        <div class="toggle-desc">Dobra automaticamente apos cada perda</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="martingale_enabled">
+                        <span class="toggle-track"></span>
+                    </label>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Multiplicador</label>
-                    <input type="number" id="martingale_multiplier" class="form-input" min="1.5" max="5.0" step="0.1" value="2.0">
-                    <p class="form-hint">Fator de multiplicacao apos perda (padrao: 2x)</p>
+
+                <div style="margin-top: 18px;">
+                    <div class="field">
+                        <label class="field-label">Niveis Maximo</label>
+                        <input type="number" id="martingale_max" class="field-input" min="1" max="10" value="3">
+                        <p class="field-hint">Quantas vezes dobrar antes de parar (ex: 3 = aposta ate 3x)</p>
+                    </div>
+
+                    <div class="field">
+                        <label class="field-label">Multiplicador</label>
+                        <input type="number" id="martingale_multiplier" class="field-input" min="1.5" max="5.0" step="0.1" value="2.0">
+                        <p class="field-hint">Fator de multiplicacao apos perda (padrao: 2x)</p>
+                    </div>
                 </div>
             </div>
 
             <!-- Limites -->
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-header"><h2>Limites de Seguranca</h2></div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-                    <div class="form-group">
-                        <label class="form-label">Stop Loss (R$)</label>
-                        <input type="number" id="stop_loss" class="form-input" min="1" max="10000" step="1" value="50">
-                        <p class="form-hint">Bot para de apostar ao perder este valor no dia</p>
+            <div class="settings-card settings-card-full">
+                <div class="card-title">
+                    <div class="card-title-icon icon-gold">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Stop Gain (R$)</label>
-                        <input type="number" id="stop_gain" class="form-input" min="1" max="10000" step="1" value="100">
-                        <p class="form-hint">Bot para de apostar ao lucrar este valor no dia</p>
+                    <div>
+                        <h2>Limites de Seguranca</h2>
+                        <p>Protecao contra perdas excessivas</p>
                     </div>
+                </div>
+
+                <div class="fields-row">
+                    <div class="field">
+                        <label class="field-label">Stop Loss (R$)</label>
+                        <input type="number" id="stop_loss" class="field-input" min="1" max="10000" step="1" value="50">
+                        <p class="field-hint">Bot para ao perder este valor no dia</p>
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Stop Gain (R$)</label>
+                        <input type="number" id="stop_gain" class="field-input" min="1" max="10000" step="1" value="100">
+                        <p class="field-hint">Bot para ao lucrar este valor no dia</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Automacao -->
+            <div class="settings-card settings-card-full">
+                <div class="card-title">
+                    <div class="card-title-icon icon-green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></svg>
+                    </div>
+                    <div>
+                        <h2>Automacao</h2>
+                        <p>Controle do bot automatico</p>
+                    </div>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <div class="toggle-label">Bot Automatico</div>
+                        <div class="toggle-desc">Apostar automaticamente quando detectar oportunidade</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="auto_bet" checked>
+                        <span class="toggle-track"></span>
+                    </label>
                 </div>
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 24px;">
-            <button class="btn btn-primary btn-lg" id="save-btn" onclick="saveSettings()">Salvar Configuracoes</button>
+        <!-- Save -->
+        <div class="save-bar">
+            <button class="save-btn" id="save-btn" onclick="saveSettings()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+                Salvar Configuracoes
+            </button>
         </div>
     </div>
 
@@ -104,7 +225,10 @@
     <script>
     const API_URL = window.location.origin + '/api';
     const token = localStorage.getItem('botblaze_token');
+    const user = JSON.parse(localStorage.getItem('botblaze_user') || '{}');
     if (!token) window.location.href = '/login.html';
+
+    if (user.role === 'admin') document.getElementById('admin-link').style.display = '';
 
     document.getElementById('logout-btn').addEventListener('click', () => {
         localStorage.removeItem('botblaze_token');
@@ -112,7 +236,15 @@
         window.location.href = '/login.html';
     });
 
-    const fields = ['bet_amount', 'strategy', 'martingale_enabled', 'martingale_max', 'martingale_multiplier', 'stop_loss', 'stop_gain', 'max_bets_per_day', 'auto_bet'];
+    function showToast(msg, type) {
+        const el = document.createElement('div');
+        el.className = 'toast toast-' + type;
+        el.innerHTML = (type === 'success' ? '&#10003;' : '&#10007;') + ' ' + msg;
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 2500);
+    }
+
+    // ── LOAD SETTINGS ───────────────────────────────────────────────────────────
 
     async function loadSettings() {
         try {
@@ -124,27 +256,25 @@
                 const s = data.settings;
                 document.getElementById('bet_amount').value = s.bet_amount || 2;
                 document.getElementById('strategy').value = s.strategy || 'color_frequency';
-                document.getElementById('martingale_enabled').checked = s.martingale_enabled == 1;
+                document.getElementById('martingale_enabled').checked = !!s.martingale_enabled;
                 document.getElementById('martingale_max').value = s.martingale_max || 3;
                 document.getElementById('martingale_multiplier').value = s.martingale_multiplier || 2.0;
                 document.getElementById('stop_loss').value = s.stop_loss || 50;
                 document.getElementById('stop_gain').value = s.stop_gain || 100;
                 document.getElementById('max_bets_per_day').value = s.max_bets_per_day || 50;
-                document.getElementById('auto_bet').checked = s.auto_bet == 1;
+                document.getElementById('auto_bet').checked = !!s.auto_bet;
             }
         } catch (err) {
             console.error('Erro:', err);
         }
     }
 
+    // ── SAVE SETTINGS ───────────────────────────────────────────────────────────
+
     async function saveSettings() {
         const btn = document.getElementById('save-btn');
-        const errorMsg = document.getElementById('error-msg');
-        const saveStatus = document.getElementById('save-status');
-        errorMsg.style.display = 'none';
-        saveStatus.style.display = 'none';
-        btn.textContent = 'Salvando...';
         btn.disabled = true;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Salvando...';
 
         const settings = {
             bet_amount: parseFloat(document.getElementById('bet_amount').value),
@@ -161,31 +291,29 @@
         try {
             const res = await fetch(API_URL + '/settings.php', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify(settings)
             });
             const data = await res.json();
 
             if (data.error) {
-                errorMsg.textContent = data.error;
-                errorMsg.style.display = 'block';
+                showToast(data.error, 'error');
             } else {
-                saveStatus.style.display = 'inline-flex';
-                setTimeout(() => saveStatus.style.display = 'none', 3000);
+                showToast('Configuracoes salvas com sucesso!', 'success');
             }
         } catch (err) {
-            errorMsg.textContent = 'Erro de conexao.';
-            errorMsg.style.display = 'block';
+            showToast('Erro de conexao', 'error');
         }
 
-        btn.textContent = 'Salvar Configuracoes';
         btn.disabled = false;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Salvar Configuracoes';
     }
 
     loadSettings();
     </script>
+
+    <style>
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
 </body>
 </html>
