@@ -1148,8 +1148,8 @@
      * Faz polling a cada 600ms, ate 8 tentativas (~5 segundos).
      */
     function waitAndClickConfirm(attempt) {
-        const MAX_ATTEMPTS = 8;
-        const POLL_INTERVAL = 600;
+        const MAX_ATTEMPTS = 12; // Mais tentativas (12 x 500ms = 6s)
+        const POLL_INTERVAL = 500;
 
         // Busca o botao na area .place-bet
         const btn = document.querySelector('.place-bet button') ||
@@ -1180,9 +1180,51 @@
             return;
         }
 
-        // Botao disponivel - clica!
-        simulateClick(btn);
-        console.log('[BotBlaze] Confirm: clicou em "' + text.substring(0, 30) + '" (tentativa ' + (attempt + 1) + ')');
+        // Se botao esta disabled, espera
+        if (btn.disabled) {
+            if (attempt < MAX_ATTEMPTS) {
+                console.log('[BotBlaze] Confirm: botao disabled, aguardando... (' + (attempt + 1) + '/' + MAX_ATTEMPTS + ')');
+                setTimeout(() => waitAndClickConfirm(attempt + 1), POLL_INTERVAL);
+            }
+            return;
+        }
+
+        // Delay humano aleatorio (200-500ms) antes de clicar
+        const humanDelay = 200 + Math.floor(Math.random() * 300);
+        setTimeout(() => {
+            // Re-verifica se botao ainda esta disponivel
+            const btnNow = document.querySelector('.place-bet button') ||
+                           document.querySelector('[class*="place-bet"] button');
+            if (!btnNow || btnNow.disabled) {
+                console.warn('[BotBlaze] Confirm: botao sumiu/disabled antes do click');
+                return;
+            }
+
+            const textNow = (btnNow.textContent || '').toLowerCase().trim();
+            if (textNow.includes('esperando') || textNow.includes('aguard')) {
+                console.warn('[BotBlaze] Confirm: botao voltou para "esperando"');
+                return;
+            }
+
+            // Usa .click() nativo = isTrusted:true (aceito pela Blaze)
+            btnNow.click();
+            console.log('[BotBlaze] Confirm: .click() em "' + textNow.substring(0, 30) +
+                '" (tentativa ' + (attempt + 1) + ', delay ' + humanDelay + 'ms)');
+
+            // Verifica se o click funcionou (botao muda para "esperando" apos aceitar)
+            setTimeout(() => {
+                const btnCheck = document.querySelector('.place-bet button') ||
+                                 document.querySelector('[class*="place-bet"] button');
+                if (btnCheck) {
+                    const checkText = (btnCheck.textContent || '').toLowerCase().trim();
+                    if (checkText.includes('esperando') || checkText.includes('aguard')) {
+                        console.log('[BotBlaze] Confirm: VERIFICADO - botao mudou para "' + checkText.substring(0, 20) + '" (aposta aceita!)');
+                    } else if (checkText.includes('começar') || checkText.includes('comecar')) {
+                        console.warn('[BotBlaze] Confirm: botao AINDA mostra "começar o jogo" - click pode nao ter funcionado');
+                    }
+                }
+            }, 300);
+        }, humanDelay);
     }
 
     /**
@@ -1209,8 +1251,7 @@
 
         // Delay entre definir valor e clicar na cor
         setTimeout(() => {
-            simulateClick(colorButton);
-            console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
+            clickColorElement(colorButton, color);
 
             // 3. Aguarda 500ms para Blaze processar a selecao de cor,
             // depois aguarda botao "Começar o jogo" ficar disponivel e clica
@@ -1510,7 +1551,28 @@
     }
 
     /**
-     * Simula um clique real (mousedown + mouseup + click).
+     * Clica num botao de cor (div.red/black/white) na Blaze.
+     * Usa .click() nativo (isTrusted:true) no filho mais interno.
+     */
+    function clickColorElement(element, color) {
+        // Encontra o filho mais interno (ex: <div>x2</div> dentro de <div class="red">)
+        let deepest = element;
+        while (deepest.firstElementChild) {
+            deepest = deepest.firstElementChild;
+        }
+
+        // .click() nativo = isTrusted:true (aceito pela Blaze)
+        deepest.click();
+        console.log('[BotBlaze] Cor: .click() em ' + deepest.tagName +
+            ' texto="' + (deepest.textContent || '').trim().substring(0, 10) +
+            '" (parent: ' + element.tagName + '.' + (element.className || '').toString().substring(0, 20) + ')');
+
+        console.log('[BotBlaze] Cor selecionada: ' + COLOR_NAMES[color]);
+    }
+
+    /**
+     * Simula um clique real para o botao de confirmar (button element).
+     * Usa pointer+mouse+click events para compatibilidade com React.
      */
     function simulateClick(element) {
         try {
