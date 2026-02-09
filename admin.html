@@ -149,7 +149,7 @@
         <div class="card" style="padding: 24px;">
             <div class="toolbar">
                 <div class="filter-dropdown" id="filter-dropdown">
-                    <button class="filter-btn" id="filter-btn" onclick="toggleFilterMenu()">
+                    <button class="filter-btn" id="filter-btn" onclick="toggleFilterMenu(event)">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
                         <span class="filter-btn-label" id="filter-label">Todos</span>
                         <span class="filter-btn-count" id="filter-count">0</span>
@@ -285,7 +285,8 @@
 
     // ── FILTER DROPDOWN ──────────────────────────────────────────────────────
 
-    function toggleFilterMenu() {
+    function toggleFilterMenu(e) {
+        e.stopPropagation();
         const btn = document.getElementById('filter-btn');
         const menu = document.getElementById('filter-menu');
         const isOpen = menu.classList.contains('open');
