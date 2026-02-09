@@ -85,6 +85,9 @@
         lastBetColor: null, // Cor da ultima aposta (nao reseta, usado pelo martingale)
         lastBetResult: null, // 'win' ou 'loss' - resultado da ultima aposta
 
+        // Controle de agendamento de aposta (impede duplicatas)
+        _betPending: false,
+
         // Controle de deteccao de novos resultados
         lastHistorySignature: '',
 
@@ -1576,6 +1579,7 @@
         if (!state.hasSubscription) return;
         if (!state.settings) return;
         if (state.waitingResult) return;
+        if (state._betPending) return; // Ja tem aposta agendada
         if (Date.now() - state.lastBetTime < MIN_BET_INTERVAL) return;
 
         if (!checkLimits()) {
@@ -1602,11 +1606,16 @@
             return;
         }
 
+        // Marca que tem aposta agendada (impede duplicatas)
+        state._betPending = true;
+
         // Delay aleatorio curto para apostar rapido durante o countdown (0.5-1.5s)
         const delay = 500 + Math.random() * 1000;
-        console.log('[BotBlaze] Apostando em ' + (delay / 1000).toFixed(1) + 's: ' + COLOR_NAMES[color] + ' R$' + amount.toFixed(2));
+        console.log('[BotBlaze] Apostando em ' + (delay / 1000).toFixed(1) + 's: ' + COLOR_NAMES[color] + ' R$' + amount.toFixed(2) +
+            (state.martingaleLevel > 0 ? ' [MG nv' + state.martingaleLevel + ']' : ''));
 
         setTimeout(() => {
+            state._betPending = false;
             if (state.botActive && detectGamePhase() === 'betting') {
                 placeBet(color, amount);
             } else {
